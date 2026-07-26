@@ -1,0 +1,333 @@
+# Hen & Egg Farm Simulator — Full Development Prompt
+### (React Native + Express.js + MongoDB)
+
+> **Use this document as a single prompt** for an AI coding assistant (Claude Code, Cursor, etc.) or as a spec for your dev team. It is fully self-contained: purpose, design system, screens, backend routes, and DB schema are all included.
+
+---
+
+## 0. Project Purpose (read this first — non-negotiable)
+
+Build **Hen & Egg Farm Simulator**, an **educational-only fintech-style demo app** that teaches users — through a fictional hen/egg investment story — how Ponzi schemes actually work, so they can recognize and avoid real ones.
+
+Hard constraints the AI/dev must always respect:
+- **No real money, ever.** No real payment gateway integration. JazzCash / Easypaisa / Card buttons exist only as **disabled, greyed-out "(Demo)" UI elements**.
+- Every screen that touches money must show a persistent **"SIMULATION ONLY" badge or banner**.
+- The app must **end** in an explicit educational module that explains Ponzi mechanics and collapse — this is the entire point of the product, not an afterthought.
+- Copy should use words like "Virtual Balance", "Virtual Hen", "Fictional Investor" — never imply real returns are possible.
+
+---
+
+## 1. Tech Stack
+
+**Frontend (Mobile):**
+- React Native (Expo recommended for faster iteration + OTA updates)
+- React Navigation (stack + bottom tabs)
+- State: Redux Toolkit (or Zustand if you want something lighter)
+- Styling: NativeWind (Tailwind for RN) or styled-components
+- Animations: `react-native-reanimated` + `lottie-react-native` for hen/egg/farm illustrations
+- Charts: `react-native-svg` + `victory-native` (or `react-native-gifted-charts`)
+- Forms: `react-hook-form` + `zod` validation
+- Networking: `axios` with an interceptor for JWT refresh
+- Push/local notifications: `expo-notifications` (all simulated, no real backend push needed unless you want it)
+
+**Backend:**
+- Node.js + Express.js
+- Auth: JWT (access + refresh tokens), `bcrypt` for password hashing
+- OTP: generate 6-digit code, store hashed in DB with expiry; deliver via console log / Nodemailer (email) in dev — no real SMS provider needed since this is a demo
+- Simulation engine: `node-cron` to advance the fictional Ponzi timeline (new investor influx, payout events, collapse trigger)
+- Realtime (optional but nice): `socket.io` to push "new investor joined" / "eggs collected" events live to the dashboard
+- Validation: `express-validator` or `zod`
+- Logging: `morgan` + `winston`
+
+**Database:**
+- MongoDB + Mongoose ODM
+
+---
+
+## 2. Design System
+
+**Palette:**
+- Primary Green: `#0F9D58` / accent `#1DBF73`
+- Background: `#FFFFFF` / soft off-white `#F7F9F8`
+- Card surface: white with glassmorphism — `rgba(255,255,255,0.6)` + `backdrop-blur` + soft green-tinted shadow
+- Warning/Collapse states: amber `#F5A623` → red `#E5484D` (used only in the collapse/final-warning flow)
+- Text: charcoal `#1A1E1B` primary, `#6B7A70` secondary
+
+**Typography:**
+- Headings: Inter / Poppins SemiBold
+- Body: Inter Regular
+- Numeric/balance displays: tabular-nums, slightly larger weight (fintech "big number" feel)
+
+**Components:**
+- Rounded cards (`radius: 20-24px`), soft elevation, subtle green gradient borders
+- Illustrations: flat/semi-flat vector style (hens, eggs, farm silo, wallet, upward chart) — consistent line weight, green/white/gold accent only
+- Buttons: pill-shaped, primary filled green, secondary outlined
+- Disabled payment buttons: greyscale, lock icon, "(Demo)" tag, no ripple/press feedback beyond a tooltip: *"Real payments are disabled in this educational app."*
+
+---
+
+## 3. App Structure — Screens
+
+### 3.1 Authentication
+- **Splash Screen** — logo animation (hen + egg + green pulse), tagline: "Learn How Ponzi Schemes Work — Safely."
+- **Login** — email/phone + password, "Forgot Password?" link
+- **Register** — name, email/phone, password, confirm password, checkbox: "I understand this is a simulation and no real money is involved"
+- **OTP Verification** — 6-digit input, resend timer (60s), auto-read hint text
+- **Forgot Password** — email/phone → OTP → new password
+
+### 3.2 Dashboard (Home)
+Cards/sections, top to bottom:
+1. **Educational Banner** (always visible, dismissible per session only, not permanently): *"🎓 This is a simulation. No real money is used. You're learning how Ponzi schemes work."*
+2. **Virtual Balance** — big number, green glass card
+3. **Total Virtual Investment**
+4. **Daily Virtual Egg Income** (with small trend arrow)
+5. **Number of Virtual Hens** (icon row: Basic/Silver/Gold/Platinum counts)
+6. **"Collect Eggs" button** — tappable once per in-app day, triggers Lottie animation (egg drops into basket) + balance increment
+7. **Recent Activity** feed — last 5 events (purchases, collections, "new investor" simulated events)
+8. Quick nav tiles: Farm / Wallet / Learn / Charts
+
+### 3.3 Virtual Farm (Store)
+Grid/list of Hen Packages, each a card with:
+
+| Package | Virtual Price | Eggs/day | Lifespan | Notes |
+|---|---|---|---|---|
+| Basic Hen | 500 virtual coins | 10 eggs | 30 days | Entry package |
+| Silver Hen | 2,000 virtual coins | 45 eggs | 45 days | |
+| Gold Hen | 5,000 virtual coins | 120 eggs | 60 days | |
+| Platinum Hen | 10,000 virtual coins | 260 eggs | 90 days | "Unrealistic ROI" flag shown on hover/tap |
+
+Each card shows:
+- Farm illustration (Lottie or static SVG per tier, gold tier gets a subtle shimmer)
+- "Remaining Life" progress ring
+- **ROI animation** — a small chart ticking upward — with a tap-to-reveal tooltip: *"This ROI looks great — that's exactly how real Ponzi schemes attract victims. Keep going to see what happens."*
+
+### 3.4 Educational Flow (the core teaching module — build as a guided horizontal-swipe or stepper)
+Step-by-step animated sequence, one screen per step, "Next" to advance:
+
+1. **Buy a Hen** — user taps buy, coin animation flies into a virtual hen pen
+2. **Daily Eggs Appear** — dashboard number ticks up, egg-collection animation
+3. **New Investors Join** — animated crowd/avatar icons streaming in, counter increasing, push notification fires
+4. **Earlier Users Get Paid** — show 2-3 fictional user avatars receiving payouts, confetti-lite animation
+5. **Reveal Screen** (tone shifts — slow down animation, muted colors): *"These rewards were never generated by the hens. They came directly from the money new investors just deposited."* — show a simple flow diagram: New Investor → Money → Old Investor (no product/service in the loop)
+6. **New Investors Stop Joining** — the crowd animation reverses/stalls, growth chart flattens
+7. **Payments Stop** — dashboard balances freeze, "Collect Eggs" button disables, red banner appears
+8. **Collapse Warning Screen** — full-screen infographic (see Section 3.6)
+
+This entire flow should be replayable from a "Learn" tab at any time, independent of the user's actual dashboard state.
+
+### 3.5 Wallet (Simulation)
+- **Demo balance** display (separate from/or same as dashboard virtual balance — your call, keep consistent)
+- **Virtual Deposit** — enter fake amount, instant credit, no real gateway
+- **Virtual Withdrawal** — enter amount, subject to fictional "collapse state" (if Ponzi has collapsed in the educational flow, withdrawal fails with an explanatory message)
+- **Transaction History** — list with type (deposit/withdrawal/egg income/purchase), timestamp, running balance
+- **Disabled Payment Methods** section:
+  - `JazzCash (Demo)` — greyed, locked
+  - `Easypaisa (Demo)` — greyed, locked
+  - `Credit/Debit Card (Demo)` — greyed, locked
+- **Persistent notice banner** (top of Wallet screen, cannot be dismissed):
+  > "No real money is accepted. All balances and transactions are simulated for educational purposes."
+
+### 3.6 Charts / Analytics Tab
+- **Egg Production Graph** — line chart, daily eggs over time
+- **User Growth Graph** — bar/area chart of fictional investor count, with a clear inflection point where growth stalls
+- **Collapse Timeline** — annotated timeline chart marking: Launch → Peak Investors → Growth Stalls → Payouts Stop → Collapse
+- **Cash Flow Visualization** — Sankey-style or simple in/out flow diagram showing money moving from new investors to old investors (no external revenue source shown — this is the visual "aha" moment)
+
+### 3.7 Notifications (in-app + local push)
+Simulated notification types, fired by the cron-driven simulation engine:
+- "🥚 Virtual eggs collected: +45"
+- "👥 New fictional investor joined — Total investors: 1,204"
+- "🎓 Educational alert: This reward is funded by new participants, not real egg sales."
+- "⚠️ Payments have stopped — new investors are no longer joining the fictional scheme."
+
+### 3.8 Final Warning / Summary Screen
+Full-screen infographic (static or lightly animated), 4 clear blocks:
+1. **Real businesses** generate income from selling actual products or services.
+2. **Ponzi schemes** pay old investors using money deposited by new investors — there is no underlying product generating that return.
+3. **When new investors stop joining**, there isn't enough new money to pay existing investors, and the system collapses.
+4. **Rule of thumb:** Never invest in anything promising guaranteed/fixed high returns without clearly understanding how the underlying business actually makes money.
+
+End with a CTA: "Restart Simulation" and a link/section: "How to spot a real Ponzi scheme in real life" (static educational text).
+
+---
+
+## 4. Backend — API Design
+
+### 4.1 Auth Routes (`/api/auth`)
+```
+POST   /register              → create user, send OTP
+POST   /verify-otp            → verify OTP, activate account, return JWT
+POST   /login                 → email/phone + password → JWT
+POST   /forgot-password        → send OTP
+POST   /reset-password         → verify OTP + set new password
+POST   /refresh-token           → issue new access token
+POST   /resend-otp
+```
+
+### 4.2 User & Dashboard (`/api/user`)
+```
+GET    /me                    → profile + virtual balance summary
+GET    /dashboard              → balance, investment, daily income, hen count, recent activity
+POST   /collect-eggs           → credits today's egg income (rate-limited to 1x/day)
+```
+
+### 4.3 Farm / Hen Packages (`/api/farm`)
+```
+GET    /packages               → list Basic/Silver/Gold/Platinum with price, eggs/day, lifespan
+POST   /buy/:packageId         → deduct virtual balance, create Investment record
+GET    /my-hens                → user's active/expired hen investments + remaining life
+```
+
+### 4.4 Wallet (`/api/wallet`)
+```
+GET    /balance
+POST   /deposit                 → virtual deposit (no gateway call)
+POST   /withdraw                → virtual withdrawal (blocked if simulation is in "collapsed" state)
+GET    /transactions            → paginated history
+```
+
+### 4.5 Simulation Engine (`/api/simulation`) — internal / cron-driven
+```
+GET    /state                   → current phase: growing | peak | stalling | collapsed
+POST   /admin/advance-phase     → (dev/admin only) manually step the simulation for demos
+GET    /investor-growth         → time series for User Growth Graph
+GET    /egg-production           → time series for Egg Production Graph
+GET    /cashflow                 → in/out flow data for Cash Flow Visualization
+```
+
+### 4.6 Notifications (`/api/notifications`)
+```
+GET    /                        → list (paginated)
+POST   /mark-read/:id
+```
+
+---
+
+## 5. MongoDB Schema (Mongoose)
+
+```js
+// User
+{
+  name, email, phone, passwordHash,
+  isVerified: Boolean,
+  virtualBalance: Number,
+  totalVirtualInvestment: Number,
+  createdAt, updatedAt
+}
+
+// OtpCode
+{
+  userId, codeHash, purpose: 'register'|'reset-password',
+  expiresAt, used: Boolean
+}
+
+// HenPackage (seeded, admin-managed)
+{
+  name: 'Basic'|'Silver'|'Gold'|'Platinum',
+  virtualPrice: Number,
+  eggsPerDay: Number,
+  lifespanDays: Number,
+  illustrationUrl: String
+}
+
+// Investment
+{
+  userId, packageId,
+  purchasedAt, expiresAt,
+  eggsCollectedTotal: Number,
+  status: 'active'|'expired'
+}
+
+// Transaction
+{
+  userId, type: 'deposit'|'withdrawal'|'egg-income'|'purchase',
+  amount: Number, balanceAfter: Number,
+  createdAt
+}
+
+// SimulationState (singleton or per-user, your choice)
+{
+  phase: 'growing'|'peak'|'stalling'|'collapsed',
+  investorCount: Number,
+  phaseStartedAt: Date
+}
+
+// Notification
+{
+  userId, type, message, read: Boolean, createdAt
+}
+```
+
+---
+
+## 6. Simulation Engine Logic (the Ponzi teaching mechanic)
+
+Use `node-cron` (e.g., every X minutes = 1 simulated "day") to:
+1. Increment `investorCount` on a growth curve (fast → slowing → flat, using a logistic/S-curve function, not linear).
+2. While `investorCount` is still growing: credit egg income + fire "new investor joined" notifications.
+3. Once growth flattens (phase → `stalling`): reduce/delay egg income credits, fire "growth is slowing" notification.
+4. Once phase → `collapsed`: freeze `Collect Eggs` button, block withdrawals, fire the collapse notification, unlock the Final Warning screen.
+5. Expose all of this via `/api/simulation/state` so the frontend can react (banner colors, disabled buttons, chart annotations) purely by reading current phase — keep frontend logic simple and state-driven.
+
+This turns the "story" into a real, observable timeline rather than a static explainer, which is the whole point of the educational flow in Section 3.4.
+
+---
+
+## 7. Suggested Folder Structure
+
+```
+/backend
+  /src
+    /config        (db.js, env.js)
+    /models
+    /routes
+    /controllers
+    /middleware    (auth, rateLimiter, errorHandler)
+    /services      (simulationEngine.js, otpService.js)
+    /jobs          (cron definitions)
+    app.js
+    server.js
+
+/mobile
+  /src
+    /screens
+      /auth
+      /dashboard
+      /farm
+      /educational
+      /wallet
+      /charts
+      /notifications
+    /components    (Card, Button, Banner, ChartWrappers, LottieViews)
+    /navigation
+    /store          (redux slices)
+    /api            (axios instance + endpoint hooks)
+    /theme          (colors.js, typography.js)
+    /assets         (illustrations, lottie json)
+```
+
+---
+
+## 8. Build Milestones (suggested order)
+
+1. Backend: Auth + OTP + JWT working end-to-end (Postman-testable)
+2. Backend: Hen packages seed + purchase + wallet endpoints
+3. Backend: Simulation engine + cron + `/simulation/state`
+4. Mobile: Auth screens + navigation shell + design system (colors/typography/cards)
+5. Mobile: Dashboard wired to real API data
+6. Mobile: Farm screen + purchase flow
+7. Mobile: Wallet screen + disabled payment buttons + persistent notice
+8. Mobile: Charts tab (all 4 visualizations)
+9. Mobile: Educational Flow stepper (this is the product's core value — give it the most polish)
+10. Mobile: Notifications (local + in-app list)
+11. Mobile: Final Warning / Summary screen + "Restart Simulation"
+12. Polish pass: glassmorphism, micro-animations, empty/loading states, accessibility labels on all "Demo"/"Simulation" badges
+
+---
+
+## 9. Non-Negotiable Copy Checklist (QA before shipping)
+- [ ] Every screen involving balance/money shows "virtual" or "simulated" in the copy
+- [ ] Payment buttons are visually disabled and labeled "(Demo)"
+- [ ] Wallet notice banner is present and non-dismissible
+- [ ] Educational Flow cannot be skipped without at least seeing the Reveal (step 5) and Collapse Warning (step 8) screens
+- [ ] App does not integrate any real payment SDK, even in a "test mode" — keep it 100% mocked in-app
