@@ -9,7 +9,7 @@ import {
   HenPackage,
   SimPhase
 } from '@/constants/types';
-import { generateId, getDateString } from '@/constants/helpers';
+import { generateId } from '@/constants/helpers';
 
 export const HEN_PACKAGES: HenPackage[] = [
   { 
@@ -67,10 +67,12 @@ interface SimulationContextType {
   
   deposit: (amount: number) => void;
   withdraw: (amount: number) => void;
+  requestWeeklyWithdrawal: () => void;
+  canWithdrawWeekly: boolean;
+  daysUntilWeeklyWithdrawal: number;
+  weeklyWithdrawalAmount: number;
   
-  canCollectToday: boolean;
   dailyEggIncome: number;
-  collectEggs: () => void;
   
   markNotificationRead: (id: string) => void;
   markAllRead: () => void;
@@ -96,9 +98,10 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     investorCount: 847,
     phaseStartedAt: new Date().toISOString(),
   });
-  const [lastCollect, setLastCollect] = useState<string>('');
+  const [lastAccruedDay, setLastAccruedDay] = useState(0);
+  const [lastWeeklyWithdrawalDay, setLastWeeklyWithdrawalDay] = useState<number | null>(null);
 
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Load data
   useEffect(() => {
@@ -111,7 +114,8 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
           transactionsStr,
           notificationsStr,
           simStateStr,
-          lastCollectStr,
+          lastAccruedDayStr,
+          lastWeeklyWithdrawalDayStr,
         ] = await Promise.all([
           AsyncStorage.getItem('@henapp/user'),
           AsyncStorage.getItem('@henapp/balance'),
@@ -119,7 +123,8 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
           AsyncStorage.getItem('@henapp/transactions'),
           AsyncStorage.getItem('@henapp/notifications'),
           AsyncStorage.getItem('@henapp/simstate'),
-          AsyncStorage.getItem('@henapp/lastcollect'),
+          AsyncStorage.getItem('@henapp/lastaccruedday'),
+          AsyncStorage.getItem('@henapp/lastweeklywithdrawalday'),
         ]);
 
         if (userStr) setUser(JSON.parse(userStr));
@@ -128,7 +133,8 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
         if (transactionsStr) setTransactions(JSON.parse(transactionsStr));
         if (notificationsStr) setNotifications(JSON.parse(notificationsStr));
         if (simStateStr) setSimState(JSON.parse(simStateStr));
-        if (lastCollectStr) setLastCollect(lastCollectStr);
+        if (lastAccruedDayStr) setLastAccruedDay(JSON.parse(lastAccruedDayStr));
+        if (lastWeeklyWithdrawalDayStr) setLastWeeklyWithdrawalDay(JSON.parse(lastWeeklyWithdrawalDayStr));
       } catch (err) {
         console.error('Load error:', err);
       } finally {
@@ -188,12 +194,21 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     }
   }, [simState, isLoaded]);
 
-  // Persist lastCollect
   useEffect(() => {
-    if (isLoaded && lastCollect) {
-      AsyncStorage.setItem('@henapp/lastcollect', lastCollect);
+    if (isLoaded) {
+      AsyncStorage.setItem('@henapp/lastaccruedday', JSON.stringify(lastAccruedDay));
     }
-  }, [lastCollect, isLoaded]);
+  }, [lastAccruedDay, isLoaded]);
+
+  useEffect(() => {
+    if (isLoaded) {
+      if (lastWeeklyWithdrawalDay === null) {
+        AsyncStorage.removeItem('@henapp/lastweeklywithdrawalday');
+      } else {
+        AsyncStorage.setItem('@henapp/lastweeklywithdrawalday', JSON.stringify(lastWeeklyWithdrawalDay));
+      }
+    }
+  }, [lastWeeklyWithdrawalDay, isLoaded]);
 
   // Simulation ticker (3 seconds = 1 day)
   useEffect(() => {
@@ -241,14 +256,30 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
           newPhase = 'collapsed';
         }
 
-        // Egg income notification (but don't auto-credit)
-        if (newPhase !== 'collapsed') {
-          const activeInvs = investments.filter(inv => inv.status === 'active' && new Date(inv.expiresAt) > new Date());
-          if (activeInvs.length > 0) {
-            const dailyEggs = activeInvs.reduce((sum, inv) => sum + inv.eggsPerDay, 0);
+        // Daily egg credits are posted automatically once per simulated day.
+        // The balance remains virtual and is never connected to a payment rail.
+        if (newDay > lastAccruedDay) {
+          const activeInvs = investments.filter(
+            inv => inv.status === 'active' && new Date(inv.expiresAt) > new Date()
+          );
+          const dailyEggs = activeInvs.reduce((sum, inv) => sum + inv.eggsPerDay, 0);
+          setLastAccruedDay(newDay);
+
+          if (newPhase !== 'collapsed' && dailyEggs > 0) {
+            addTransaction({
+              type: 'egg-income',
+              amount: dailyEggs,
+              description: `Daily egg credit: ${dailyEggs} virtual eggs added automatically`,
+            });
+            setInvestments(prev => prev.map(inv => {
+              if (inv.status === 'active' && new Date(inv.expiresAt) > new Date()) {
+                return { ...inv, eggsCollectedTotal: inv.eggsCollectedTotal + inv.eggsPerDay };
+              }
+              return inv;
+            }));
             addNotification({
               type: 'egg',
-              message: `Your hens produced ${dailyEggs} virtual eggs today. Tap "Collect Eggs" to claim them.`,
+              message: `${dailyEggs} virtual eggs were added to your balance for today. Credits are automatic.`,
             });
           }
         }
@@ -273,7 +304,7 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [isLoaded, user, investments]);
+  }, [isLoaded, user, investments, lastAccruedDay]);
 
   const addNotification = useCallback((notif: Omit<AppNotification, 'id' | 'read' | 'createdAt'>) => {
     const newNotif: AppNotification = {
@@ -307,6 +338,8 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     };
     setUser(newUser);
     setVirtualBalance(1000);
+    setLastAccruedDay(0);
+    setLastWeeklyWithdrawalDay(null);
     addTransaction({
       type: 'deposit',
       amount: 1000,
@@ -326,7 +359,8 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
       '@henapp/transactions',
       '@henapp/notifications',
       '@henapp/simstate',
-      '@henapp/lastcollect',
+      '@henapp/lastaccruedday',
+      '@henapp/lastweeklywithdrawalday',
     ]);
     setUser(null);
     setVirtualBalance(0);
@@ -340,7 +374,8 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
       investorCount: 847,
       phaseStartedAt: new Date().toISOString(),
     });
-    setLastCollect('');
+    setLastAccruedDay(0);
+    setLastWeeklyWithdrawalDay(null);
   }, []);
 
   const buyHen = useCallback((pkg: HenPackage) => {
@@ -387,48 +422,84 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     if (simState.phase === 'collapsed') {
       addNotification({
         type: 'warning',
-        message: 'Withdrawal failed: The scheme has collapsed. No payouts are possible.',
+        message: 'Weekly virtual withdrawal is unavailable after the simulation reaches the collapse phase.',
+      });
+      return;
+    }
+    if (amount <= 0) return;
+    const withdrawalDay = lastWeeklyWithdrawalDay === null
+      ? simState.simulationDay
+      : simState.simulationDay - lastWeeklyWithdrawalDay;
+    if (lastWeeklyWithdrawalDay === null ? simState.simulationDay < 7 : withdrawalDay < 7) {
+      addNotification({
+        type: 'warning',
+        message: `Weekly virtual withdrawals unlock in ${Math.max(1, 7 - withdrawalDay)} simulated day(s).`,
       });
       return;
     }
     if (amount > virtualBalance) {
       addNotification({
         type: 'warning',
-        message: 'Insufficient virtual balance.',
+        message: 'Your virtual balance is lower than that withdrawal amount.',
       });
       return;
     }
+    setLastWeeklyWithdrawalDay(simState.simulationDay);
     addTransaction({
       type: 'withdrawal',
       amount: -amount,
-      description: `Virtual withdrawal of ${amount} coins`,
+      description: `Weekly virtual withdrawal of ${amount} coins`,
     });
-  }, [virtualBalance, simState.phase, addTransaction, addNotification]);
+    addNotification({
+      type: 'educational',
+      message: `Your weekly virtual withdrawal of ${amount} coins was processed. No real money was transferred.`,
+    });
+  }, [
+    virtualBalance,
+    simState.phase,
+    simState.simulationDay,
+    lastWeeklyWithdrawalDay,
+    addTransaction,
+    addNotification,
+  ]);
+
+  const weeklyWithdrawalAmount = virtualBalance;
+  const daysSinceWeeklyWithdrawal = lastWeeklyWithdrawalDay === null
+    ? simState.simulationDay
+    : simState.simulationDay - lastWeeklyWithdrawalDay;
+  const canWithdrawWeekly =
+    simState.phase !== 'collapsed' &&
+    weeklyWithdrawalAmount > 0 &&
+    (lastWeeklyWithdrawalDay === null ? simState.simulationDay >= 7 : daysSinceWeeklyWithdrawal >= 7);
+  const daysUntilWeeklyWithdrawal = canWithdrawWeekly
+    ? 0
+    : Math.max(0, 7 - daysSinceWeeklyWithdrawal);
+
+  const requestWeeklyWithdrawal = useCallback(() => {
+    if (!canWithdrawWeekly) {
+      addNotification({
+        type: 'warning',
+        message: simState.phase === 'collapsed'
+          ? 'Weekly virtual withdrawals are paused because the simulation has collapsed.'
+          : weeklyWithdrawalAmount <= 0
+            ? 'There is no virtual balance available to withdraw yet.'
+            : `Your next weekly virtual withdrawal unlocks in ${daysUntilWeeklyWithdrawal} simulated day(s).`,
+      });
+      return;
+    }
+    withdraw(weeklyWithdrawalAmount);
+  }, [
+    canWithdrawWeekly,
+    addNotification,
+    simState.phase,
+    weeklyWithdrawalAmount,
+    daysUntilWeeklyWithdrawal,
+    withdraw,
+  ]);
 
   const dailyEggIncome = investments
     .filter(inv => inv.status === 'active' && new Date(inv.expiresAt) > new Date())
     .reduce((sum, inv) => sum + inv.eggsPerDay, 0);
-
-  const canCollectToday = lastCollect !== getDateString(new Date());
-
-  const collectEggs = useCallback(() => {
-    if (!canCollectToday) return;
-    if (dailyEggIncome === 0) return;
-
-    setLastCollect(getDateString(new Date()));
-    addTransaction({
-      type: 'egg-income',
-      amount: dailyEggIncome,
-      description: `Collected ${dailyEggIncome} virtual eggs`,
-    });
-    
-    setInvestments(prev => prev.map(inv => {
-      if (inv.status === 'active' && new Date(inv.expiresAt) > new Date()) {
-        return { ...inv, eggsCollectedTotal: inv.eggsCollectedTotal + inv.eggsPerDay };
-      }
-      return inv;
-    }));
-  }, [canCollectToday, dailyEggIncome, addTransaction]);
 
   const markNotificationRead = useCallback((id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
@@ -463,7 +534,8 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
       investorCount: 847,
       phaseStartedAt: new Date().toISOString(),
     });
-    setLastCollect('');
+    setLastAccruedDay(0);
+    setLastWeeklyWithdrawalDay(null);
   }, []);
 
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -484,9 +556,11 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
         buyHen,
         deposit,
         withdraw,
-        canCollectToday,
+        requestWeeklyWithdrawal,
+        canWithdrawWeekly,
+        daysUntilWeeklyWithdrawal,
+        weeklyWithdrawalAmount,
         dailyEggIncome,
-        collectEggs,
         markNotificationRead,
         markAllRead,
         resetSimulation,

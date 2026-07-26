@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Platform, Pressable, TextInput, Alert, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Platform, Pressable, TextInput, Alert } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useSimulation } from '@/contexts/SimulationContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SimBadge } from '@/components/SimBadge';
 import { TransactionRow } from '@/components/TransactionRow';
 import { formatNumber } from '@/constants/helpers';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,9 +10,17 @@ import { Ionicons } from '@expo/vector-icons';
 export default function WalletScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { virtualBalance, transactions, simState, deposit, withdraw } = useSimulation();
+  const {
+    virtualBalance,
+    transactions,
+    simState,
+    deposit,
+    requestWeeklyWithdrawal,
+    canWithdrawWeekly,
+    daysUntilWeeklyWithdrawal,
+    weeklyWithdrawalAmount,
+  } = useSimulation();
   const [showDeposit, setShowDeposit] = useState(false);
-  const [showWithdraw, setShowWithdraw] = useState(false);
   const [amount, setAmount] = useState('');
   const [visibleCount, setVisibleCount] = useState(20);
 
@@ -26,15 +33,6 @@ export default function WalletScreen() {
     }
   };
 
-  const handleWithdraw = () => {
-    const num = Number(amount);
-    if (num > 0) {
-      withdraw(num);
-      setAmount('');
-      setShowWithdraw(false);
-    }
-  };
-
   const handlePaymentDemo = (method: string) => {
     Alert.alert(
       'Demo Only',
@@ -44,9 +42,9 @@ export default function WalletScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.banner, { backgroundColor: colors.destructive }]}>
+       <View style={[styles.banner, { backgroundColor: colors.destructive }]}>
         <Text style={[styles.bannerText, { color: colors.destructiveForeground }]}>
-          No real money accepted. All balances and transactions are simulated for educational purposes.
+          Virtual balances only. No real money is accepted or transferred.
         </Text>
       </View>
 
@@ -71,7 +69,6 @@ export default function WalletScreen() {
           <View style={styles.buttonsRow}>
             <Pressable
               onPress={() => {
-                setShowWithdraw(false);
                 setShowDeposit(!showDeposit);
                 setAmount('');
               }}
@@ -86,19 +83,21 @@ export default function WalletScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => {
-                setShowDeposit(false);
-                setShowWithdraw(!showWithdraw);
-                setAmount('');
-              }}
+              onPress={requestWeeklyWithdrawal}
               style={({ pressed }) => [
                 styles.actionButton,
-                { backgroundColor: colors.secondary, borderColor: colors.border, borderWidth: 1 },
-                pressed && styles.actionButtonPressed,
+                {
+                  backgroundColor: canWithdrawWeekly ? colors.secondary : colors.muted,
+                  borderColor: colors.border,
+                  borderWidth: 1,
+                },
+                pressed && canWithdrawWeekly && styles.actionButtonPressed,
               ]}
             >
               <Ionicons name="remove-circle-outline" size={20} color={colors.secondaryForeground} />
-              <Text style={[styles.actionButtonText, { color: colors.secondaryForeground }]}>Withdraw</Text>
+              <Text style={[styles.actionButtonText, { color: canWithdrawWeekly ? colors.secondaryForeground : colors.mutedForeground }]}>
+                {canWithdrawWeekly ? 'Withdraw Weekly Balance' : `Available in ${daysUntilWeeklyWithdrawal} day(s)`}
+              </Text>
             </Pressable>
           </View>
         )}
@@ -127,29 +126,25 @@ export default function WalletScreen() {
           </View>
         )}
 
-        {showWithdraw && (
-          <View style={[styles.inputCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.inputLabel, { color: colors.foreground }]}>Withdraw Amount</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.input }]}
-              value={amount}
-              onChangeText={setAmount}
-              placeholder="0"
-              placeholderTextColor={colors.mutedForeground}
-              keyboardType="number-pad"
-            />
-            <Pressable
-              onPress={handleWithdraw}
-              style={({ pressed }) => [
-                styles.submitButton,
-                { backgroundColor: colors.destructive },
-                pressed && styles.submitButtonPressed,
-              ]}
-            >
-              <Text style={[styles.submitButtonText, { color: colors.destructiveForeground }]}>Confirm Withdraw</Text>
-            </Pressable>
+        <View style={[styles.weeklyCard, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+          <View style={styles.weeklyHeader}>
+            <View>
+              <Text style={[styles.weeklyTitle, { color: colors.foreground }]}>Weekly virtual withdrawal</Text>
+              <Text style={[styles.weeklySubtitle, { color: colors.mutedForeground }]}>
+                {canWithdrawWeekly
+                  ? 'Your current virtual balance is ready.'
+                  : `Unlocks after ${daysUntilWeeklyWithdrawal} more simulated day(s).`}
+              </Text>
+            </View>
+            <Ionicons name="calendar-outline" size={22} color={colors.primary} />
           </View>
-        )}
+          <Text style={[styles.weeklyAmount, { color: colors.foreground }]}>
+            {formatNumber(weeklyWithdrawalAmount)} virtual coins
+          </Text>
+          <Text style={[styles.weeklyNote, { color: colors.mutedForeground }]}>
+            This is a simulated withdrawal. It does not send money to a bank, wallet, or payment provider.
+          </Text>
+        </View>
 
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Transaction History</Text>
 
@@ -172,7 +167,7 @@ export default function WalletScreen() {
           </Pressable>
         )}
 
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Payment Methods (Demo)</Text>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Payment Methods</Text>
 
         {['JazzCash', 'Easypaisa', 'Credit/Debit Card'].map(method => (
           <Pressable
@@ -185,7 +180,7 @@ export default function WalletScreen() {
             ]}
           >
             <Ionicons name="lock-closed" size={20} color={colors.mutedForeground} />
-            <Text style={[styles.paymentText, { color: colors.mutedForeground }]}>{method} (Demo)</Text>
+            <Text style={[styles.paymentText, { color: colors.mutedForeground }]}>{method} — unavailable</Text>
             <View style={[styles.demoBadge, { backgroundColor: colors.destructive }]}>
               <Text style={[styles.demoText, { color: colors.destructiveForeground }]}>Demo</Text>
             </View>
@@ -267,6 +262,37 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     marginBottom: 20,
+  },
+  weeklyCard: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 24,
+  },
+  weeklyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  weeklyTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
+    marginBottom: 4,
+  },
+  weeklySubtitle: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+  },
+  weeklyAmount: {
+    fontSize: 24,
+    fontFamily: 'Inter_700Bold',
+    marginBottom: 8,
+  },
+  weeklyNote: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 17,
   },
   inputLabel: {
     fontSize: 14,

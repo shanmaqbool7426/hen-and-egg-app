@@ -14,7 +14,7 @@ interface HenCardProps {
   disabledReason?: string;
 }
 
-const TIER_COLORS = {
+const TIER_COLORS: Record<HenPackage['tier'], readonly [string, string]> = {
   basic: ['#0F9D58', '#0F9D58'],
   silver: ['#B8B8B8', '#9E9E9E'],
   gold: ['#FFD700', '#FFA500'],

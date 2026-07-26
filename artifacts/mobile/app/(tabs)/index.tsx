@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useSimulation } from '@/contexts/SimulationContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,9 +8,7 @@ import { StatCard } from '@/components/StatCard';
 import { TransactionRow } from '@/components/TransactionRow';
 import { formatNumber } from '@/constants/helpers';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { HEN_PACKAGES } from '@/contexts/SimulationContext';
 
@@ -39,12 +37,9 @@ export default function HomeScreen() {
     transactions,
     simState,
     dailyEggIncome,
-    canCollectToday,
-    collectEggs,
   } = useSimulation();
 
   const [bannerDismissed, setBannerDismissed] = useState(false);
-  const collectScale = useSharedValue(1);
 
   const activeInvestments = investments.filter(
     inv => inv.status === 'active' && new Date(inv.expiresAt) > new Date()
@@ -56,21 +51,6 @@ export default function HomeScreen() {
     gold: activeInvestments.filter(inv => inv.tier === 'gold').length,
     platinum: activeInvestments.filter(inv => inv.tier === 'platinum').length,
   };
-
-  const handleCollect = () => {
-    if (!canCollectToday) return;
-    collectScale.value = withSpring(1.1, { damping: 5 }, () => {
-      collectScale.value = withSpring(1);
-    });
-    if (Platform.OS !== 'web') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
-    collectEggs();
-  };
-
-  const collectAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: collectScale.value }],
-  }));
 
   const phaseColor = PHASE_COLORS[simState.phase];
 
@@ -136,33 +116,21 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        <Animated.View style={collectAnimatedStyle}>
-          <Pressable
-            onPress={handleCollect}
-            disabled={!canCollectToday || dailyEggIncome === 0}
-            style={({ pressed }) => [
-              styles.collectButton,
-              { backgroundColor: canCollectToday && dailyEggIncome > 0 ? colors.primary : colors.muted },
-              pressed && canCollectToday && dailyEggIncome > 0 && styles.collectButtonPressed,
-            ]}
-          >
-            <Ionicons
-              name="egg-outline"
-              size={24}
-              color={canCollectToday && dailyEggIncome > 0 ? colors.primaryForeground : colors.mutedForeground}
-            />
-            <Text
-              style={[
-                styles.collectButtonText,
-                { color: canCollectToday && dailyEggIncome > 0 ? colors.primaryForeground : colors.mutedForeground },
-              ]}
-            >
-              {canCollectToday && dailyEggIncome > 0
-                ? `Collect ${formatNumber(dailyEggIncome)} Eggs`
-                : 'Collected Today'}
+        <View style={[styles.creditCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.creditIcon, { backgroundColor: `${colors.primary}18` }]}>
+            <Ionicons name="egg-outline" size={24} color={colors.primary} />
+          </View>
+          <View style={styles.creditContent}>
+            <Text style={[styles.creditTitle, { color: colors.foreground }]}>
+              Daily egg credits are automatic
             </Text>
-          </Pressable>
-        </Animated.View>
+            <Text style={[styles.creditSubtitle, { color: colors.mutedForeground }]}>
+              {dailyEggIncome > 0
+                ? `${formatNumber(dailyEggIncome)} virtual eggs are added each simulated day.`
+                : 'Buy a virtual hen to start receiving daily credits.'}
+            </Text>
+          </View>
+        </View>
 
         <View style={[styles.phaseCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.phaseHeader}>
@@ -323,21 +291,34 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     textTransform: 'capitalize',
   },
-  collectButton: {
+  creditCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingVertical: 18,
+    padding: 16,
     borderRadius: 16,
+    borderWidth: 1,
     marginBottom: 20,
   },
-  collectButtonPressed: {
-    opacity: 0.7,
+  creditIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  collectButtonText: {
-    fontSize: 17,
+  creditContent: {
+    flex: 1,
+  },
+  creditTitle: {
+    fontSize: 15,
     fontFamily: 'Inter_700Bold',
+    marginBottom: 4,
+  },
+  creditSubtitle: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 18,
   },
   phaseCard: {
     padding: 16,
