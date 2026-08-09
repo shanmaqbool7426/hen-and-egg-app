@@ -1,22 +1,152 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Platform, FlatList } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, Platform, Pressable,
+  Modal, TextInput, ActivityIndicator, RefreshControl,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useColors } from '@/hooks/useColors';
-import { useSimulation } from '@/contexts/SimulationContext';
+import { API_URL, useHenFarm } from '@/contexts/HenFarmApiContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SimBadge } from '@/components/SimBadge';
-import { HenCard } from '@/components/HenCard';
-import { InvestmentRow } from '@/components/InvestmentRow';
-import { HEN_PACKAGES } from '@/contexts/SimulationContext';
-import { Ionicons } from '@expo/vector-icons';
+import { formatNumber } from '@/constants/helpers';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useToast } from '@/components/Toast';
+import { cardShadow, heroShadow } from '@/constants/shadows';
+import { useFocusEffect, useRouter } from 'expo-router';
 
-export default function FarmScreen() {
+interface SellerListing {
+  userId: string;
+  userName: string;
+  location: string;
+  totalHens: number;
+  pricePerHen: number;
+  eggBuyRate: number;
+  responseMinutes: number;
+  rating: number;
+  verified: boolean;
+  easyPaisaAccount?: string;
+  jazzCashAccount?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountTitle?: string;
+  whatsappNumber?: string;
+}
+
+export default function MarketplaceScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { virtualBalance, investments, simState, buyHen } = useSimulation();
+  const router = useRouter();
+  const { availableEggs, user, authFetch } = useHenFarm();
+  const { showToast } = useToast();
 
-  const activeInvestments = investments.filter(
-    inv => inv.status === 'active' && new Date(inv.expiresAt) > new Date()
-  );
+  const [sellers, setSellers] = useState<SellerListing[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedSeller, setSelectedSeller] = useState<SellerListing | null>(null);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [quantity, setQuantity] = useState('1');
+  const [orderType, setOrderType] = useState<'buy-hen' | 'sell-egg'>('buy-hen');
+  const [paymentMethod, setPaymentMethod] = useState<'easypaisa' | 'jazzcash' | 'bank'>('easypaisa');
+  const [paymentProof, setPaymentProof] = useState('');
+  const [receiverAccount, setReceiverAccount] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const fetchSellers = useCallback(async () => {
+    try {
+      setLoading(true);
+      const sellersRes = await fetch(`${API_URL}/marketplace/sellers`);
+      const data = await sellersRes.json();
+      if (data.success) setSellers(data.sellers || []);
+    } catch {
+      showToast('Failed to load marketplace. Check your connection.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(useCallback(() => { fetchSellers(); }, [fetchSellers]));
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchSellers();
+    setRefreshing(false);
+  }, [fetchSellers]);
+
+  const handleBuyPress = (seller: SellerListing) => {
+    setSelectedSeller(seller);
+    setOrderType('buy-hen');
+    setQuantity('1');
+    setPaymentMethod('easypaisa');
+    setPaymentProof('');
+    setReceiverAccount('');
+    setShowPurchaseModal(true);
+  };
+
+  const handleSellEggsPress = (seller: SellerListing) => {
+    setSelectedSeller(seller);
+    setOrderType('sell-egg');
+    setQuantity(availableEggs > 0 ? String(Math.floor(availableEggs)) : '1');
+    setPaymentMethod('easypaisa');
+    setPaymentProof('');
+    setReceiverAccount('');
+    setShowPurchaseModal(true);
+  };
+
+  const confirmPurchase = async () => {
+    if (!selectedSeller || !user) {
+      showToast('Please login first', 'error');
+      return;
+    }
+
+    const qty = Number(quantity);
+    const unitPrice = orderType === 'buy-hen' ? selectedSeller.pricePerHen : selectedSeller.eggBuyRate;
+
+    if (qty < 1) { showToast('Quantity must be at least 1', 'warning'); return; }
+    if (orderType === 'buy-hen' && qty > selectedSeller.totalHens) {
+      showToast(`Dealer only has ${selectedSeller.totalHens} hens available`, 'warning'); return;
+    }
+    if (orderType === 'sell-egg' && qty > availableEggs) {
+      showToast(`You only have ${formatNumber(availableEggs)} eggs available to sell`, 'warning'); return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await authFetch(`${API_URL}/orders/create`, {
+        method: 'POST',
+        body: JSON.stringify({
+          sellerId: selectedSeller.userId,
+          orderType,
+          quantity: qty,
+          pricePerUnit: unitPrice,
+          paymentMethod,
+          paymentProof,
+          receiverAccount,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success && data.order) {
+        setShowPurchaseModal(false);
+        setSelectedSeller(null);
+        showToast(
+          orderType === 'buy-hen'
+            ? `Order sent! ${qty} hens request pending dealer approval.`
+            : `Egg sale request sent! Awaiting dealer response.`,
+          'success'
+        );
+        router.push('/orders');
+      } else {
+        showToast(data.error || 'Order creation failed', 'error');
+      }
+    } catch {
+      showToast('Failed to create order. Please try again.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const totalCost = (Number(quantity) || 0) * (selectedSeller
+    ? (orderType === 'buy-hen' ? selectedSeller.pricePerHen : selectedSeller.eggBuyRate)
+    : 0);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -26,112 +156,577 @@ export default function FarmScreen() {
           { paddingTop: Platform.OS === 'web' ? 67 + 20 : insets.top + 20 },
           { paddingBottom: Platform.OS === 'web' ? 84 + 20 : insets.bottom + 84 + 20 },
         ]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
+        {/* Header */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.foreground }]}>Virtual Farm</Text>
-          <SimBadge size="sm" />
-        </View>
-
-        <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
-          <Text style={[styles.summaryText, { color: colors.foreground }]}>
-            {activeInvestments.length} active hen{activeInvestments.length !== 1 ? 's' : ''}
-          </Text>
-        </View>
-
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Available Packages</Text>
-
-        {HEN_PACKAGES.map(pkg => {
-          const disabled =
-            virtualBalance < pkg.virtualPrice || simState.phase === 'collapsed';
-          const disabledReason = simState.phase === 'collapsed'
-            ? 'Scheme has collapsed'
-            : virtualBalance < pkg.virtualPrice
-            ? 'Insufficient balance'
-            : undefined;
-
-          return (
-            <HenCard
-              key={pkg.id}
-              package={pkg}
-              onBuy={() => buyHen(pkg)}
-              disabled={disabled}
-              disabledReason={disabledReason}
-            />
-          );
-        })}
-
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>My Active Hens</Text>
-
-        {activeInvestments.length === 0 ? (
-          <View style={[styles.emptyState, { backgroundColor: colors.card }]}>
-            <Ionicons name="leaf-outline" size={48} color={colors.mutedForeground} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              No hens yet — buy your first one above
+          <View>
+            <Text style={[styles.title, { color: colors.foreground }]}>Marketplace</Text>
+            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+              Buy hens or sell eggs with verified dealers
             </Text>
           </View>
-        ) : (
-          <View style={styles.investmentsList}>
-            {activeInvestments.map(inv => {
-              const pkg = HEN_PACKAGES.find(p => p.id === inv.packageId);
-              if (!pkg) return null;
-              return <InvestmentRow key={inv.id} investment={inv} packageInfo={pkg} />;
-            })}
+          <Pressable
+            onPress={fetchSellers}
+            style={[styles.refreshBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <Ionicons name="refresh" size={20} color={colors.primary} />
+          </Pressable>
+        </View>
+
+        {/* Eggs Info Banner */}
+        {availableEggs > 0 && (
+          <LinearGradient
+            colors={['#065F46', '#047857']}
+            style={[styles.eggsInfoBanner, heroShadow(colors)]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          >
+            <MaterialCommunityIcons name="egg" size={28} color="#FFFFFF" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.eggsInfoTitle}>Eggs Ready to Sell!</Text>
+              <Text style={styles.eggsInfoSubtitle}>
+                You have {formatNumber(availableEggs)} eggs in stock — tap "Sell Eggs" on any dealer below.
+              </Text>
+            </View>
+          </LinearGradient>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Loading sellers...</Text>
           </View>
         )}
+
+        {/* Empty State */}
+        {!loading && sellers.length === 0 && (
+          <View style={[styles.emptyState, { backgroundColor: colors.card }, cardShadow(colors)]}>
+            <MaterialCommunityIcons name="store-off" size={56} color={colors.mutedForeground} />
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No Sellers Available</Text>
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+              No sellers are listing hens right now. Pull down to refresh!
+            </Text>
+          </View>
+        )}
+
+        {/* Seller Cards */}
+        {!loading && sellers.length > 0 && (
+          <>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              {sellers.length} Verified Dealer{sellers.length !== 1 ? 's' : ''} Available
+            </Text>
+
+            {sellers.map((seller) => (
+              <View
+                key={seller.userId}
+                style={[styles.sellerCard, { backgroundColor: colors.card, borderColor: colors.border }, cardShadow(colors)]}
+              >
+                {/* Card Header */}
+                <View style={styles.sellerHeader}>
+                  <View style={[styles.avatarCircle, { backgroundColor: colors.primary + '20' }]}>
+                    <Ionicons name="person" size={22} color={colors.primary} />
+                  </View>
+                  <View style={styles.sellerInfo}>
+                    <View style={styles.sellerNameRow}>
+                      <Text
+                        style={[styles.sellerName, { color: colors.foreground }]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {seller.userName}
+                      </Text>
+                      {seller.verified && (
+                        <View style={styles.verifiedBadge}>
+                          <Ionicons name="checkmark-circle" size={14} color="#10B981" />
+                          <Text style={styles.verifiedText}>Verified</Text>
+                        </View>
+                      )}
+                    </View>
+                    {seller.location ? (
+                      <View style={styles.locationRow}>
+                        <Ionicons name="location-outline" size={13} color={colors.mutedForeground} />
+                        <Text style={[styles.location, { color: colors.mutedForeground }]}>
+                          {seller.location}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {seller.rating > 0 && (
+                    <View style={styles.ratingBadge}>
+                      <Ionicons name="star" size={13} color="#F59E0B" />
+                      <Text style={styles.rating}>{seller.rating.toFixed(1)}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Pricing Row */}
+                <View style={[styles.pricingRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <View style={styles.pricingItem}>
+                    <MaterialCommunityIcons name="egg" size={18} color={colors.primary} />
+                    <View>
+                      <Text style={[styles.pricingLabel, { color: colors.mutedForeground }]}>Hen Price</Text>
+                      <Text style={[styles.pricingValue, { color: colors.foreground }]}>
+                        Rs {formatNumber(seller.pricePerHen)}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={[styles.pricingDivider, { backgroundColor: colors.border }]} />
+                  <View style={styles.pricingItem}>
+                    <MaterialCommunityIcons name="cash" size={18} color="#10B981" />
+                    <View>
+                      <Text style={[styles.pricingLabel, { color: colors.mutedForeground }]}>Egg Buy Rate</Text>
+                      <Text style={[styles.pricingValue, { color: '#10B981' }]}>
+                        Rs {formatNumber(seller.eggBuyRate)}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={[styles.pricingDivider, { backgroundColor: colors.border }]} />
+                  <View style={styles.pricingItem}>
+                    <Ionicons name="layers" size={18} color="#F59E0B" />
+                    <View>
+                      <Text style={[styles.pricingLabel, { color: colors.mutedForeground }]}>Available</Text>
+                      <Text style={[styles.pricingValue, { color: '#F59E0B' }]}>
+                        {seller.totalHens} hens
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Response time */}
+                {seller.responseMinutes > 0 && (
+                  <View style={styles.responseRow}>
+                    <Ionicons name="time-outline" size={13} color={colors.mutedForeground} />
+                    <Text style={[styles.responseText, { color: colors.mutedForeground }]}>
+                      Responds within {seller.responseMinutes} min
+                    </Text>
+                  </View>
+                )}
+
+                {/* Action Buttons */}
+                <View style={styles.dealerActions}>
+                  <Pressable
+                    onPress={() => handleBuyPress(seller)}
+                    style={({ pressed }) => [
+                      styles.dealerBtn,
+                      { backgroundColor: colors.primary },
+                      pressed && { opacity: 0.8 },
+                    ]}
+                  >
+                    <MaterialCommunityIcons name="egg" size={16} color="#FFFFFF" />
+                    <Text style={styles.dealerBtnText}>Buy Hens</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleSellEggsPress(seller)}
+                    style={({ pressed }) => [
+                      styles.dealerBtn,
+                      { backgroundColor: '#047857' },
+                      pressed && { opacity: 0.8 },
+                    ]}
+                  >
+                    <MaterialCommunityIcons name="cash-multiple" size={16} color="#FFFFFF" />
+                    <Text style={styles.dealerBtnText}>Sell Eggs</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+          </>
+        )}
       </ScrollView>
+
+      {/* Order Modal */}
+      <Modal
+        visible={showPurchaseModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPurchaseModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+            {/* Modal Handle */}
+            <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+                {orderType === 'buy-hen' ? '🐔 Purchase Hens' : '🥚 Sell Eggs'}
+              </Text>
+              <Pressable
+                onPress={() => setShowPurchaseModal(false)}
+                style={[styles.closeBtn, { backgroundColor: colors.background }]}
+              >
+                <Ionicons name="close" size={20} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {selectedSeller && (
+                <>
+                  {/* Seller Info Summary */}
+                  <View style={[styles.modalSellerRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <Ionicons name="person-circle-outline" size={32} color={colors.primary} />
+                    <View>
+                      <Text style={[styles.modalSellerName, { color: colors.foreground }]}>{selectedSeller.userName}</Text>
+                      <Text style={[styles.modalSellerSub, { color: colors.mutedForeground }]}>
+                        {orderType === 'buy-hen'
+                          ? `Rs ${formatNumber(selectedSeller.pricePerHen)} per hen`
+                          : `Pays Rs ${formatNumber(selectedSeller.eggBuyRate)} per egg unit`}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Quantity Input */}
+                  <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Quantity</Text>
+                  <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <Ionicons name="layers-outline" size={20} color="#94A3B8" style={{ marginRight: 10 }} />
+                    <TextInput
+                      style={[styles.modalInput, { color: colors.foreground }]}
+                      value={quantity}
+                      onChangeText={setQuantity}
+                      keyboardType="number-pad"
+                      placeholder="Enter quantity"
+                      placeholderTextColor="#64748B"
+                    />
+                  </View>
+
+                  {/* Total Cost */}
+                  <View style={[styles.totalCostBox, { backgroundColor: colors.primary + '15', borderColor: colors.primary }]}>
+                    <Text style={[styles.totalCostLabel, { color: colors.mutedForeground }]}>Total Amount</Text>
+                    <Text style={[styles.totalCostValue, { color: colors.primary }]}>
+                      Rs {formatNumber(totalCost)}
+                    </Text>
+                  </View>
+
+                  {/* Payment Method */}
+                  <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Payment Method</Text>
+                  <View style={styles.paymentMethodsRow}>
+                    {(['easypaisa', 'jazzcash', 'bank'] as const).map((method) => (
+                      <Pressable
+                        key={method}
+                        onPress={() => setPaymentMethod(method)}
+                        style={[
+                          styles.paymentMethodBtn,
+                          {
+                            backgroundColor: paymentMethod === method ? colors.primary : colors.background,
+                            borderColor: paymentMethod === method ? colors.primary : colors.border,
+                          },
+                        ]}
+                      >
+                        <Text style={[
+                          styles.paymentMethodText,
+                          { color: paymentMethod === method ? '#FFFFFF' : colors.mutedForeground },
+                        ]}>
+                          {method === 'easypaisa' ? 'EasyPaisa' : method === 'jazzcash' ? 'JazzCash' : 'Bank'}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  {/* Payment Details */}
+                  <View style={[styles.paymentDetailsBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    {orderType === 'buy-hen' ? (
+                      <>
+                        <Text style={[styles.paymentDetailsTitle, { color: colors.foreground }]}>
+                          Send Payment To:
+                        </Text>
+                        {paymentMethod === 'easypaisa' && selectedSeller.easyPaisaAccount && (
+                          <Text style={[styles.paymentDetailText, { color: colors.foreground }]}>
+                            📱 EasyPaisa: {selectedSeller.easyPaisaAccount}
+                          </Text>
+                        )}
+                        {paymentMethod === 'jazzcash' && selectedSeller.jazzCashAccount && (
+                          <Text style={[styles.paymentDetailText, { color: colors.foreground }]}>
+                            📱 JazzCash: {selectedSeller.jazzCashAccount}
+                          </Text>
+                        )}
+                        {paymentMethod === 'bank' && selectedSeller.bankName && (
+                          <>
+                            <Text style={[styles.paymentDetailText, { color: colors.foreground }]}>
+                              🏦 Bank: {selectedSeller.bankName}
+                            </Text>
+                            <Text style={[styles.paymentDetailText, { color: colors.foreground }]}>
+                              Account: {selectedSeller.bankAccountNumber} ({selectedSeller.bankAccountTitle})
+                            </Text>
+                          </>
+                        )}
+                        <Text style={[styles.paymentDetailHint, { color: colors.mutedForeground }]}>
+                          After sending, paste the Transaction ID below:
+                        </Text>
+                        <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 8 }]}>
+                          <Ionicons name="receipt-outline" size={18} color="#94A3B8" style={{ marginRight: 10 }} />
+                          <TextInput
+                            style={[styles.modalInput, { color: colors.foreground }]}
+                            value={paymentProof}
+                            onChangeText={setPaymentProof}
+                            placeholder="Transaction ID / payment note"
+                            placeholderTextColor="#64748B"
+                            autoCapitalize="none"
+                          />
+                        </View>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={[styles.paymentDetailsTitle, { color: colors.foreground }]}>
+                          Receive Payment At:
+                        </Text>
+                        <Text style={[styles.paymentDetailHint, { color: colors.mutedForeground }]}>
+                          Enter your {paymentMethod === 'easypaisa' ? 'EasyPaisa' : paymentMethod === 'jazzcash' ? 'JazzCash' : 'bank'} account:
+                        </Text>
+                        <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 8 }]}>
+                          <Ionicons name="wallet-outline" size={18} color="#94A3B8" style={{ marginRight: 10 }} />
+                          <TextInput
+                            style={[styles.modalInput, { color: colors.foreground }]}
+                            value={receiverAccount}
+                            onChangeText={setReceiverAccount}
+                            placeholder={paymentMethod === 'bank' ? 'Your bank account number' : 'Your account (03xxxxxxxxx)'}
+                            placeholderTextColor="#64748B"
+                            autoCapitalize="none"
+                          />
+                        </View>
+                      </>
+                    )}
+                  </View>
+
+                  {/* Modal Actions */}
+                  <View style={styles.modalActions}>
+                    <Pressable
+                      onPress={() => setShowPurchaseModal(false)}
+                      style={[styles.modalCancelBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
+                    >
+                      <Text style={[styles.modalCancelText, { color: colors.mutedForeground }]}>Cancel</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={confirmPurchase}
+                      disabled={isSubmitting}
+                      style={[styles.modalConfirmBtn, { backgroundColor: colors.primary, opacity: isSubmitting ? 0.6 : 1 }]}
+                    >
+                      {isSubmitting ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.modalConfirmText}>
+                          {orderType === 'buy-hen' ? 'Send Request' : 'Confirm Sale'}
+                        </Text>
+                      )}
+                    </Pressable>
+                  </View>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-  },
+  container: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
   },
-  title: {
-    fontSize: 28,
-    fontFamily: 'Inter_700Bold',
-  },
-  summaryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 16,
+  title: { fontSize: 28, fontFamily: 'Inter_700Bold', marginBottom: 2 },
+  subtitle: { fontSize: 13, fontFamily: 'Inter_400Regular' },
+  refreshBtn: {
+    width: 42,
+    height: 42,
     borderRadius: 12,
     borderWidth: 1,
-    marginBottom: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  summaryText: {
-    fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
+  eggsInfoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 20,
+    gap: 14,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-    marginBottom: 16,
-  },
+  eggsInfoTitle: { fontSize: 15, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 2 },
+  eggsInfoSubtitle: { fontSize: 12, fontFamily: 'Inter_400Regular', color: '#D1FAE5', lineHeight: 17 },
+  loadingContainer: { alignItems: 'center', paddingVertical: 60, gap: 14 },
+  loadingText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
   emptyState: {
     padding: 40,
-    borderRadius: 16,
+    borderRadius: 20,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  emptyTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', marginTop: 16, marginBottom: 8 },
+  emptyText: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', lineHeight: 20 },
+  sectionTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', marginBottom: 16, opacity: 0.8 },
+  sellerCard: {
+    borderRadius: 20,
+    borderWidth: 1.5,
+    marginBottom: 18,
+    padding: 16,
+  },
+  sellerHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16, gap: 12 },
+  avatarCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sellerInfo: { flex: 1, minWidth: 0 },
+  sellerNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  sellerName: { fontSize: 16, fontFamily: 'Inter_700Bold', flexShrink: 1 },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    flexShrink: 0,
+  },
+  verifiedText: { fontSize: 11, fontFamily: 'Inter_700Bold', color: '#065F46' },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  location: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    flexShrink: 0,
+  },
+  rating: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#F59E0B' },
+  pricingRow: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 12,
+  },
+  pricingItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  pricingDivider: { width: 1 },
+  pricingLabel: { fontSize: 10, fontFamily: 'Inter_500Medium' },
+  pricingValue: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  responseRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 14 },
+  responseText: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  dealerActions: { flexDirection: 'row', gap: 10 },
+  dealerBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 46,
+    borderRadius: 12,
+    gap: 8,
+  },
+  dealerBtnText: { fontSize: 14, fontFamily: 'Inter_700Bold', color: '#FFFFFF' },
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: 40,
+    maxHeight: '90%',
+  },
+  modalHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
   },
-  emptyText: {
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-    marginTop: 12,
-    textAlign: 'center',
+  modalTitle: { fontSize: 20, fontFamily: 'Inter_700Bold' },
+  closeBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  investmentsList: {
+  modalSellerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
     marginBottom: 20,
   },
+  modalSellerName: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  modalSellerSub: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  inputLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold', marginBottom: 8 },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    height: 50,
+    marginBottom: 16,
+  },
+  modalInput: { flex: 1, fontSize: 15, fontFamily: 'Inter_500Medium' },
+  totalCostBox: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  totalCostLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  totalCostValue: { fontSize: 24, fontFamily: 'Inter_700Bold' },
+  paymentMethodsRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  paymentMethodBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paymentMethodText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  paymentDetailsBox: {
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 20,
+    gap: 6,
+  },
+  paymentDetailsTitle: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  paymentDetailText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  paymentDetailHint: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17 },
+  modalActions: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  modalCancelBtn: {
+    flex: 1,
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelText: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  modalConfirmBtn: {
+    flex: 2,
+    height: 52,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalConfirmText: { fontSize: 15, fontFamily: 'Inter_700Bold', color: '#FFFFFF' },
 });

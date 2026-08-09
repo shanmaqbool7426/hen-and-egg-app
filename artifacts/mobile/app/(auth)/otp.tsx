@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColors } from '@/hooks/useColors';
-import { useSimulation } from '@/contexts/SimulationContext';
+import { useHenFarm } from '@/contexts/HenFarmApiContext';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -10,7 +10,7 @@ export default function OtpScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useSimulation();
+  const { user } = useHenFarm();
   const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
   const [timer, setTimer] = useState(60);
   const inputRefs = useRef<(TextInput | null)[]>([]);
@@ -43,7 +43,7 @@ export default function OtpScreen() {
   const handleVerify = () => {
     const code = otp.join('');
     if (code.length === 6) {
-      router.replace('/(tabs)/');
+      router.replace('/(tabs)');
     }
   };
 

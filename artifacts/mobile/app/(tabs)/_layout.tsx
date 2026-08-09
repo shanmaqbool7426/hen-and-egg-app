@@ -20,20 +20,16 @@ function NativeTabLayout() {
         <Label>Home</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="farm">
-        <Icon sf={{ default: 'leaf', selected: 'leaf.fill' }} />
-        <Label>Farm</Label>
+        <Icon sf={{ default: 'cart', selected: 'cart.fill' }} />
+        <Label>Marketplace</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="wallet">
-        <Icon sf={{ default: 'wallet.pass', selected: 'wallet.pass.fill' }} />
-        <Label>Wallet</Label>
+        <Icon sf={{ default: 'leaf', selected: 'leaf.fill' }} />
+        <Label>My Farm</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="learn">
-        <Icon sf={{ default: 'graduationcap', selected: 'graduationcap.fill' }} />
-        <Label>Learn</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="charts">
-        <Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} />
-        <Label>Charts</Label>
+      <NativeTabs.Trigger name="profile">
+        <Icon sf={{ default: 'person.circle', selected: 'person.circle.fill' }} />
+        <Label>Profile</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -92,48 +88,36 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="farm"
         options={{
-          title: 'Farm',
+          title: 'Marketplace',
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="leaf.fill" tintColor={color} size={24} />
+              <SymbolView name="cart.fill" tintColor={color} size={24} />
             ) : (
-              <MaterialCommunityIcons name="sprout" size={22} color={color} />
+              <Feather name="shopping-cart" size={22} color={color} />
             ),
         }}
       />
       <Tabs.Screen
         name="wallet"
         options={{
-          title: 'Wallet',
+          title: 'My Farm',
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="wallet.pass" tintColor={color} size={24} />
+              <SymbolView name="leaf.fill" tintColor={color} size={24} />
             ) : (
-              <Ionicons name="wallet-outline" size={22} color={color} />
+              <MaterialCommunityIcons name="bird" size={22} color={color} />
             ),
         }}
       />
       <Tabs.Screen
-        name="learn"
+        name="profile"
         options={{
-          title: 'Learn',
+          title: 'Profile',
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="graduationcap.fill" tintColor={color} size={24} />
+              <SymbolView name="person.circle.fill" tintColor={color} size={24} />
             ) : (
-              <Ionicons name="book-outline" size={22} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="charts"
-        options={{
-          title: 'Charts',
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="chart.bar.fill" tintColor={color} size={24} />
-            ) : (
-              <Ionicons name="bar-chart-outline" size={22} color={color} />
+              <Feather name="user" size={22} color={color} />
             ),
         }}
       />

@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
 
@@ -149,13 +150,14 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
   }
 
   metroProcess = spawn(
-    'pnpm',
+    pnpmCommand,
     ['exec', 'expo', 'start', '--no-dev', '--minify', '--localhost'],
     {
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: false,
       cwd: projectRoot,
       env,
+      shell: process.platform === 'win32',
     },
   );
 
@@ -229,7 +231,7 @@ async function downloadBundle(platform, timestamp) {
     'expo-router',
     'entry',
   );
-  const bundlePath = path.relative(workspaceRoot, entryPath);
+  const bundlePath = path.relative(projectRoot, entryPath);
   const url = new URL(`http://localhost:8081/${bundlePath}.bundle`);
   url.searchParams.set('platform', platform);
   url.searchParams.set('dev', 'false');

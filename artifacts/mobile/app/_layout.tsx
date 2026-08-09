@@ -13,7 +13,8 @@ import {
 } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { SimulationProvider, useSimulation } from '@/contexts/SimulationContext';
+import { HenFarmProvider } from '@/contexts/HenFarmApiContext';
+import { ToastProvider } from '@/components/Toast';
 import { useColors } from '@/hooks/useColors';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -37,8 +38,8 @@ function RootLayoutNav() {
           headerTintColor: colors.primaryForeground,
         }}
       />
-      <Stack.Screen name="summary" options={{ headerShown: false }} />
-      <Stack.Screen name="learn/flow" options={{ headerShown: false }} />
+      <Stack.Screen name="referrals" options={{ headerShown: false }} />
+      <Stack.Screen name="admin" options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -61,15 +62,21 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <ErrorBoundary>
+      <ErrorBoundary
+        onError={(error, stackTrace) =>
+          console.error('App crashed:', error, '\nStack:\n' + stackTrace)
+        }
+      >
         <QueryClientProvider client={queryClient}>
-          <SimulationProvider>
-            <GestureHandlerRootView>
-              <KeyboardProvider>
-                <RootLayoutNav />
-              </KeyboardProvider>
-            </GestureHandlerRootView>
-          </SimulationProvider>
+          <HenFarmProvider>
+            <ToastProvider>
+              <GestureHandlerRootView>
+                <KeyboardProvider>
+                  <RootLayoutNav />
+                </KeyboardProvider>
+              </GestureHandlerRootView>
+            </ToastProvider>
+          </HenFarmProvider>
         </QueryClientProvider>
       </ErrorBoundary>
     </SafeAreaProvider>

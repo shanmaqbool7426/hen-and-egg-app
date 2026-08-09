@@ -76,6 +76,18 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
           Please reload the app to continue.
         </Text>
 
+        {__DEV__ ? (
+          <Text
+            style={[
+              styles.inlineError,
+              { color: colors.destructive, fontFamily: monoFont },
+            ]}
+            selectable
+          >
+            {error.message}
+          </Text>
+        ) : null}
+
         <Pressable
           onPress={handleRestart}
           style={({ pressed }) => [
@@ -193,6 +205,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     lineHeight: 24,
+  },
+  inlineError: {
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
   },
   topButton: {
     position: 'absolute',

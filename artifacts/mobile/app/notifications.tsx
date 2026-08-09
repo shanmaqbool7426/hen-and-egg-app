@@ -1,23 +1,22 @@
 import React from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, Platform } from 'react-native';
 import { useColors } from '@/hooks/useColors';
-import { useSimulation } from '@/contexts/SimulationContext';
+import { useHenFarm } from '@/contexts/HenFarmApiContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AppNotification } from '@/constants/types';
 import { formatDate } from '@/constants/helpers';
 
 const NOTIFICATION_ICONS: Record<AppNotification['type'], keyof typeof Ionicons.glyphMap> = {
-  egg: 'egg-outline',
-  investor: 'people-outline',
-  educational: 'school-outline',
+  order: 'receipt-outline',
+  referral: 'people-outline',
   warning: 'warning-outline',
 };
 
 export default function NotificationsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { notifications, markNotificationRead, markAllRead } = useSimulation();
+  const { notifications, markNotificationRead, markAllRead } = useHenFarm();
 
   const handlePress = (id: string) => {
     markNotificationRead(id);
@@ -68,7 +67,7 @@ export default function NotificationsScreen() {
                 ]}
               >
                 <Ionicons
-                  name={NOTIFICATION_ICONS[item.type]}
+                  name={NOTIFICATION_ICONS[item.type as AppNotification['type']]} 
                   size={20}
                   color={item.read ? colors.mutedForeground : colors.primary}
                 />

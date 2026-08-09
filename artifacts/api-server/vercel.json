@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/daily-eggs",
+      "schedule": "0 0 * * *"
+    }
+  ],
+  "functions": {
+    "api/[...path].ts": {
+      "maxDuration": 30
+    },
+    "api/cron/daily-eggs.ts": {
+      "maxDuration": 30
+    }
+  }
+}

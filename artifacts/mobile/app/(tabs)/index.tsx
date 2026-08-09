@@ -1,58 +1,60 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
 import { useColors } from '@/hooks/useColors';
-import { useSimulation } from '@/contexts/SimulationContext';
+import { API_URL, useHenFarm } from '@/contexts/HenFarmApiContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SimBadge } from '@/components/SimBadge';
-import { StatCard } from '@/components/StatCard';
-import { TransactionRow } from '@/components/TransactionRow';
 import { formatNumber } from '@/constants/helpers';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { HEN_PACKAGES } from '@/contexts/SimulationContext';
-
-const PHASE_COLORS = {
-  growing: '#0F9D58',
-  peak: '#F5A623',
-  stalling: '#FF8C00',
-  collapsed: '#E5484D',
-};
-
-const TIER_COLORS = {
-  basic: '#0F9D58',
-  silver: '#9E9E9E',
-  gold: '#FFD700',
-  platinum: '#7B68EE',
-};
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useToast } from '@/components/Toast';
+import { cardShadow, heroShadow } from '@/constants/shadows';
 
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { showToast } = useToast();
   const {
-    virtualBalance,
-    totalInvestment,
-    investments,
-    transactions,
-    simState,
-    dailyEggIncome,
-  } = useSimulation();
+    user,
+    hensOwned,
+    availableEggs,
+    totalEggsEarned,
+    completedReferralCount,
+    refreshData,
+    authFetch,
+  } = useHenFarm();
 
-  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [pendingOrders, setPendingOrders] = useState(0);
 
-  const activeInvestments = investments.filter(
-    inv => inv.status === 'active' && new Date(inv.expiresAt) > new Date()
+  // A seller's relevant "hens" number is their selling stock, not hens they
+  // personally bought (hensOwned) - those are two different things.
+  const isSeller = user?.role === 'seller';
+  const primaryHensCount = isSeller ? (user?.availableHens || 0) : hensOwned;
+
+  const fetchOrderSummary = useCallback(async () => {
+    if (!user?._id) return;
+    try {
+      const res = await authFetch(`${API_URL}/orders/my-orders/${user._id}`);
+      const data = await res.json();
+      if (data.success) {
+        const pending = [...(data.buyOrders || []), ...(data.sellOrders || [])].filter(
+          (o: any) => o.status === 'pending'
+        );
+        setPendingOrders(pending.length);
+      }
+    } catch (e) {
+      console.error('Failed to load order summary', e);
+    }
+  }, [user?._id, authFetch]);
+
+  // Refetch every time this tab regains focus (e.g. after approving/creating
+  // an order elsewhere), not just once on mount - otherwise counts go stale.
+  useFocusEffect(
+    useCallback(() => {
+      fetchOrderSummary();
+    }, [fetchOrderSummary])
   );
-
-  const henCounts = {
-    basic: activeInvestments.filter(inv => inv.tier === 'basic').length,
-    silver: activeInvestments.filter(inv => inv.tier === 'silver').length,
-    gold: activeInvestments.filter(inv => inv.tier === 'gold').length,
-    platinum: activeInvestments.filter(inv => inv.tier === 'platinum').length,
-  };
-
-  const phaseColor = PHASE_COLORS[simState.phase];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -63,135 +65,192 @@ export default function HomeScreen() {
           { paddingBottom: Platform.OS === 'web' ? 84 + 20 : insets.bottom + 84 + 20 },
         ]}
       >
-        {!bannerDismissed && (
-          <View style={[styles.banner, { backgroundColor: colors.warning + '20', borderColor: colors.warning }]}>
-            <Ionicons name="information-circle" size={20} color={colors.warning} />
-            <Text style={[styles.bannerText, { color: colors.warningForeground }]}>
-              This is a simulation. No real money is used. You are learning how Ponzi schemes work.
+        {/* Welcome Header */}
+        <View style={styles.header}>
+          <View style={styles.headerGreeting}>
+            <Text style={[styles.greeting, { color: colors.foreground }]} numberOfLines={1}>
+              Welcome back, {user?.name?.split(' ')[0] || 'Friend'}!
             </Text>
-            <Pressable onPress={() => setBannerDismissed(true)}>
-              <Ionicons name="close" size={20} color={colors.warningForeground} />
+            <Text style={[styles.subGreeting, { color: colors.mutedForeground }]}>
+              Real hens, real eggs, real orders
+            </Text>
+          </View>
+          <View style={styles.headerActions}>
+            <Pressable
+              style={styles.refreshButton}
+              onPress={async () => {
+                try {
+                  await Promise.all([refreshData(), fetchOrderSummary()]);
+                  showToast('Data refreshed successfully', 'success');
+                } catch {
+                  showToast('Failed to refresh data', 'error');
+                }
+              }}
+            >
+              <Ionicons name="refresh" size={20} color={colors.mutedForeground} />
             </Pressable>
           </View>
-        )}
-
-        <View style={styles.header}>
-          <Text style={[styles.greeting, { color: colors.foreground }]}>Dashboard</Text>
-          <SimBadge size="sm" />
         </View>
 
+        {/* Eggs Ready Card */}
         <LinearGradient
           colors={[colors.primary, colors.accent]}
-          style={styles.balanceCard}
+          style={[styles.eggsCard, heroShadow(colors)]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         >
-          <Text style={styles.balanceLabel}>Virtual Balance</Text>
-          <Text style={styles.balanceValue}>{formatNumber(virtualBalance)}</Text>
-          <Text style={styles.balanceSubtitle}>Simulation Coins</Text>
+          <View style={styles.eggsIconCircle}>
+            <MaterialCommunityIcons name="egg" size={32} color="#FFFFFF" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.eggsLabel}>Eggs Ready to Sell</Text>
+            <Text style={styles.eggsValue}>{formatNumber(availableEggs)}</Text>
+          </View>
+          {availableEggs > 0 && (
+            <Pressable style={styles.sellBtn} onPress={() => router.push('/(tabs)/farm')}>
+              <Text style={styles.sellBtnText}>Sell</Text>
+            </Pressable>
+          )}
         </LinearGradient>
 
-        <View style={styles.statsRow}>
-          <View style={{ flex: 1 }}>
-            <StatCard label="Total Invested" value={formatNumber(totalInvestment)} icon="wallet-outline" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <StatCard
-              label="Daily Income"
-              value={formatNumber(dailyEggIncome)}
-              icon="trending-up"
-              color={colors.accent}
-              subtitle="eggs/day"
-            />
-          </View>
-        </View>
-
-        <View style={styles.henCountsRow}>
-          {(['basic', 'silver', 'gold', 'platinum'] as const).map(tier => (
-            <View key={tier} style={[styles.henTile, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={[styles.henDot, { backgroundColor: TIER_COLORS[tier] }]} />
-              <Text style={[styles.henCount, { color: colors.foreground }]}>{henCounts[tier]}</Text>
-              <Text style={[styles.henLabel, { color: colors.mutedForeground }]}>{tier}</Text>
+        {/* Quick Stats */}
+        <View style={styles.statsGrid}>
+          <View style={[styles.statBox, { backgroundColor: colors.card }, cardShadow(colors)]}>
+            <View style={[styles.statIconCircle, { backgroundColor: colors.primary + '1A' }]}>
+              <MaterialCommunityIcons name="bird" size={20} color={colors.primary} />
             </View>
-          ))}
+            <Text style={[styles.statValue, { color: colors.foreground }]}>{primaryHensCount}</Text>
+            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{isSeller ? 'My Hen Stock' : 'Hens Owned'}</Text>
+          </View>
+
+          <View style={[styles.statBox, { backgroundColor: colors.card }, cardShadow(colors)]}>
+            <View style={[styles.statIconCircle, { backgroundColor: '#F0A93C1A' }]}>
+              <Ionicons name="time-outline" size={20} color="#F0A93C" />
+            </View>
+            <Text style={[styles.statValue, { color: colors.foreground }]}>{pendingOrders}</Text>
+            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Pending Orders</Text>
+          </View>
+
+          <View style={[styles.statBox, { backgroundColor: colors.card }, cardShadow(colors)]}>
+            <View style={[styles.statIconCircle, { backgroundColor: '#3B82F61A' }]}>
+              <Ionicons name="people" size={20} color="#3B82F6" />
+            </View>
+            <Text style={[styles.statValue, { color: colors.foreground }]}>{completedReferralCount}</Text>
+            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Referrals</Text>
+          </View>
+
+          <View style={[styles.statBox, { backgroundColor: colors.card }, cardShadow(colors)]}>
+            <View style={[styles.statIconCircle, { backgroundColor: colors.accent + '1A' }]}>
+              <MaterialCommunityIcons name="egg" size={20} color={colors.accent} />
+            </View>
+            <Text style={[styles.statValue, { color: colors.foreground }]}>{formatNumber(availableEggs)}</Text>
+            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Eggs in Stock</Text>
+          </View>
         </View>
 
-        <View style={[styles.creditCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.creditIcon, { backgroundColor: `${colors.primary}18` }]}>
-            <Ionicons name="egg-outline" size={24} color={colors.primary} />
-          </View>
-          <View style={styles.creditContent}>
-            <Text style={[styles.creditTitle, { color: colors.foreground }]}>
-              Daily egg credits are automatic
+        {/* Call to Action */}
+        {isSeller ? (
+          <Pressable
+            style={[styles.quickBuyCard, { backgroundColor: colors.card }, cardShadow(colors)]}
+            onPress={() => router.push('/(tabs)/profile')}
+          >
+            <View style={styles.quickBuyContent}>
+              <MaterialCommunityIcons name="storefront" size={32} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.quickBuyTitle, { color: colors.foreground }]}>
+                  Manage Your Stock & Pricing
+                </Text>
+                <Text style={[styles.quickBuySubtitle, { color: colors.mutedForeground }]}>
+                  You have {primaryHensCount} hens listed - update your rates in Profile
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color={colors.mutedForeground} />
+            </View>
+          </Pressable>
+        ) : hensOwned === 0 ? (
+          <View style={[styles.ctaCard, { backgroundColor: colors.primary + '10', borderColor: colors.primary }, cardShadow(colors)]}>
+            <MaterialCommunityIcons name="storefront-outline" size={48} color={colors.primary} />
+            <Text style={[styles.ctaTitle, { color: colors.foreground }]}>
+              Browse the Marketplace
             </Text>
-            <Text style={[styles.creditSubtitle, { color: colors.mutedForeground }]}>
-              {dailyEggIncome > 0
-                ? `${formatNumber(dailyEggIncome)} virtual eggs are added each simulated day.`
-                : 'Buy a virtual hen to start receiving daily credits.'}
+            <Text style={[styles.ctaSubtitle, { color: colors.mutedForeground }]}>
+              Buy real, verified hens directly from dealers near you.
             </Text>
-          </View>
-        </View>
-
-        <View style={[styles.phaseCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={styles.phaseHeader}>
-            <Text style={[styles.phaseTitle, { color: colors.foreground }]}>Simulation Phase</Text>
-            <View style={[styles.phaseBadge, { backgroundColor: phaseColor + '20' }]}>
-              <View style={[styles.phaseDot, { backgroundColor: phaseColor }]} />
-              <Text style={[styles.phaseLabel, { color: phaseColor }]}>{simState.phase.toUpperCase()}</Text>
-            </View>
-          </View>
-          <View style={styles.phaseStats}>
-            <View>
-              <Text style={[styles.phaseStatLabel, { color: colors.mutedForeground }]}>Day</Text>
-              <Text style={[styles.phaseStatValue, { color: colors.foreground }]}>{simState.simulationDay}</Text>
-            </View>
-            <View>
-              <Text style={[styles.phaseStatLabel, { color: colors.mutedForeground }]}>Virtual Investors</Text>
-              <Text style={[styles.phaseStatValue, { color: colors.foreground }]}>
-                {formatNumber(simState.investorCount)}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent Activity</Text>
-        </View>
-
-        {transactions.length === 0 ? (
-          <View style={[styles.emptyState, { backgroundColor: colors.card }]}>
-            <Ionicons name="receipt-outline" size={48} color={colors.mutedForeground} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No transactions yet</Text>
+            <Pressable
+              style={[styles.ctaButton, { backgroundColor: colors.primary }]}
+              onPress={() => router.push('/(tabs)/farm')}
+            >
+              <Text style={styles.ctaButtonText}>Go to Marketplace →</Text>
+            </Pressable>
           </View>
         ) : (
-          <View style={[styles.activityList, { backgroundColor: colors.card }]}>
-            {transactions.slice(0, 5).map(tx => (
-              <TransactionRow key={tx.id} transaction={tx} />
-            ))}
-          </View>
+          <Pressable
+            style={[styles.quickBuyCard, { backgroundColor: colors.card }, cardShadow(colors)]}
+            onPress={() => router.push('/(tabs)/farm')}
+          >
+            <View style={styles.quickBuyContent}>
+              <MaterialCommunityIcons name="plus-circle" size={32} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.quickBuyTitle, { color: colors.foreground }]}>
+                  Browse More Sellers
+                </Text>
+                <Text style={[styles.quickBuySubtitle, { color: colors.mutedForeground }]}>
+                  Find more verified dealers in the Marketplace
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color={colors.mutedForeground} />
+            </View>
+          </Pressable>
         )}
 
+        {/* Earnings Summary */}
+        <Pressable
+          onPress={() => router.push('/orders?tab=earnings')}
+          style={[styles.earningsCard, { backgroundColor: colors.card }, cardShadow(colors)]}
+        >
+          <View style={[styles.earningsIconCircle, { backgroundColor: colors.primary + '1A' }]}>
+            <MaterialCommunityIcons name="chart-line" size={22} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.earningsTitle, { color: colors.foreground }]}>
+              {formatNumber(totalEggsEarned)} eggs earned so far
+            </Text>
+            <Text style={[styles.earningsSubtitle, { color: colors.mutedForeground }]}>
+              View full earnings history →
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
+        </Pressable>
+
+        {/* Quick Navigation */}
         <View style={styles.quickNav}>
           {[
-            { label: 'Farm', icon: 'sprout' as const, route: '/(tabs)/farm' },
-            { label: 'Wallet', icon: 'wallet-outline' as const, route: '/(tabs)/wallet' },
-            { label: 'Learn', icon: 'book-outline' as const, route: '/(tabs)/learn' },
-            { label: 'Charts', icon: 'bar-chart-outline' as const, route: '/(tabs)/charts' },
+            { label: 'Marketplace', icon: 'storefront' as const, route: '/(tabs)/farm', color: '#0F9D58' },
+            { label: 'My Farm', icon: 'bird' as const, route: '/(tabs)/wallet', color: '#00B0FF' },
+            { label: 'Earnings', icon: 'trending-up' as const, route: '/orders?tab=earnings', color: '#0A8A4C' },
+            { label: 'Referrals', icon: 'people' as const, route: '/referrals', color: '#FF9100' },
+            { label: 'Orders', icon: 'receipt-outline' as const, route: '/orders', color: '#E040FB' },
+            ...(user?.role === 'admin'
+              ? [{ label: 'Admin Panel', icon: 'settings' as const, route: '/admin', color: '#D32F2F' }]
+              : []),
           ].map(item => (
             <Pressable
               key={item.label}
               onPress={() => router.push(item.route as any)}
               style={({ pressed }) => [
                 styles.navTile,
-                { backgroundColor: colors.card, borderColor: colors.border },
+                { backgroundColor: colors.card },
+                cardShadow(colors),
                 pressed && styles.navTilePressed,
               ]}
             >
-              {item.icon === 'sprout' ? (
-                <MaterialCommunityIcons name="sprout" size={24} color={colors.primary} />
-              ) : (
-                <Ionicons name={item.icon} size={24} color={colors.primary} />
-              )}
+              <View style={[styles.navIconCircle, { backgroundColor: item.color + '20' }]}>
+                {item.icon === 'bird' ? (
+                  <MaterialCommunityIcons name="bird" size={20} color={item.color} />
+                ) : (
+                  <Ionicons name={item.icon} size={20} color={item.color} />
+                )}
+              </View>
               <Text style={[styles.navLabel, { color: colors.foreground }]}>{item.label}</Text>
             </Pressable>
           ))}
@@ -208,208 +267,215 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
   },
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 20,
-  },
-  bannerText: {
-    flex: 1,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    lineHeight: 16,
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 20,
   },
+  headerGreeting: {
+    flex: 1,
+    marginRight: 12,
+  },
   greeting: {
-    fontSize: 28,
+    fontSize: 24,
     fontFamily: 'Inter_700Bold',
+    marginBottom: 4,
   },
-  balanceCard: {
-    padding: 24,
+  subGreeting: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexShrink: 0,
+  },
+  refreshButton: {
+    padding: 6,
+  },
+  avatarButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarButtonText: {
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+    color: '#FFFFFF',
+  },
+  eggsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
     borderRadius: 20,
-    marginBottom: 16,
+    marginBottom: 24,
+    gap: 14,
   },
-  balanceLabel: {
+  eggsIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  eggsLabel: {
     fontSize: 14,
     fontFamily: 'Inter_500Medium',
     color: '#FFFFFF',
     opacity: 0.9,
-    marginBottom: 8,
+    marginBottom: 2,
   },
-  balanceValue: {
-    fontSize: 48,
+  eggsValue: {
+    fontSize: 32,
     fontFamily: 'Inter_700Bold',
     color: '#FFFFFF',
     letterSpacing: -1,
-    marginBottom: 4,
   },
-  balanceSubtitle: {
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
-    color: '#FFFFFF',
-    opacity: 0.8,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  henCountsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  henTile: {
-    flex: 1,
-    padding: 12,
+  sellBtn: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     borderRadius: 12,
-    borderWidth: 1,
+  },
+  sellBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 24,
+  },
+  statBox: {
+    flex: 1,
+    minWidth: '47%',
+    padding: 16,
+    borderRadius: 18,
     alignItems: 'center',
+    gap: 8,
   },
-  henDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginBottom: 6,
+  statIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  henCount: {
-    fontSize: 18,
+  statValue: {
+    fontSize: 20,
+    fontFamily: 'Inter_700Bold',
+  },
+  statLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+  },
+  earningsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+    borderRadius: 18,
+    marginBottom: 20,
+  },
+  earningsIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  earningsTitle: {
+    fontSize: 15,
     fontFamily: 'Inter_700Bold',
     marginBottom: 2,
   },
-  henLabel: {
-    fontSize: 10,
-    fontFamily: 'Inter_500Medium',
-    textTransform: 'capitalize',
-  },
-  creditCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 20,
-  },
-  creditIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  creditContent: {
-    flex: 1,
-  },
-  creditTitle: {
-    fontSize: 15,
-    fontFamily: 'Inter_700Bold',
-    marginBottom: 4,
-  },
-  creditSubtitle: {
+  earningsSubtitle: {
     fontSize: 13,
     fontFamily: 'Inter_400Regular',
-    lineHeight: 18,
   },
-  phaseCard: {
-    padding: 16,
+  ctaCard: {
+    padding: 24,
     borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 24,
-  },
-  phaseHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    borderWidth: 1.5,
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 20,
   },
-  phaseTitle: {
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  phaseBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  phaseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  phaseLabel: {
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.5,
-  },
-  phaseStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  phaseStatLabel: {
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  phaseStatValue: {
+  ctaTitle: {
     fontSize: 20,
     fontFamily: 'Inter_700Bold',
+    marginTop: 12,
+    marginBottom: 8,
     textAlign: 'center',
   },
-  sectionHeader: {
-    marginBottom: 12,
+  ctaSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 16,
   },
-  sectionTitle: {
-    fontSize: 18,
+  ctaButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  ctaButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
     fontFamily: 'Inter_700Bold',
   },
-  activityList: {
-    borderRadius: 16,
+  quickBuyCard: {
     padding: 16,
+    borderRadius: 18,
     marginBottom: 20,
   },
-  emptyState: {
-    padding: 40,
-    borderRadius: 16,
+  quickBuyContent: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    gap: 12,
   },
-  emptyText: {
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-    marginTop: 12,
+  quickBuyTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
+    marginBottom: 2,
+  },
+  quickBuySubtitle: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
   },
   quickNav: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginBottom: 20,
   },
   navTile: {
     flex: 1,
+    minWidth: '47%',
     padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 16,
     alignItems: 'center',
     gap: 8,
   },
   navTilePressed: {
     opacity: 0.7,
   },
+  navIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   navLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: 'Inter_600SemiBold',
   },
 });

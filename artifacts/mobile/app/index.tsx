@@ -1,10 +1,10 @@
 import { Redirect } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
-import { useSimulation } from '@/contexts/SimulationContext';
+import { useHenFarm } from '@/contexts/HenFarmApiContext';
 import { useColors } from '@/hooks/useColors';
 
 export default function IndexRedirect() {
-  const { user, isLoaded } = useSimulation();
+  const { user, isLoaded } = useHenFarm();
   const colors = useColors();
 
   if (!isLoaded) {
@@ -19,5 +19,5 @@ export default function IndexRedirect() {
     return <Redirect href="/(auth)/login" />;
   }
 
-  return <Redirect href="/(tabs)/" />;
+  return <Redirect href="/(tabs)" />;
 }

@@ -1,14 +1,14 @@
 import React, { useEffect } from 'react';
 import { Stack, Redirect } from 'expo-router';
-import { useSimulation } from '@/contexts/SimulationContext';
+import { useHenFarm } from '@/contexts/HenFarmApiContext';
 
 export default function AuthLayout() {
-  const { user, isLoaded } = useSimulation();
+  const { user, isLoaded } = useHenFarm();
 
   if (!isLoaded) return null;
   
   if (user) {
-    return <Redirect href="/(tabs)/" />;
+    return <Redirect href="/(tabs)" />;
   }
 
   return (

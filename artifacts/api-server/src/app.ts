@@ -3,6 +3,9 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+// connectDB and startDailyEggsJob are initialized in index.ts AFTER .env is loaded
+export { connectDB } from "./db/mongoose";
+export { startDailyEggsJob } from "./jobs/daily-eggs";
 
 const app: Express = express();
 
@@ -31,4 +34,6 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
 
+
 export default app;
+

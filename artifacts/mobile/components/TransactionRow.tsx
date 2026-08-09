@@ -1,42 +1,35 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useColors } from '@/hooks/useColors';
-import { Transaction } from '@/constants/types';
-import { formatNumber, formatDate } from '@/constants/helpers';
+import { ReferralActivity } from '@/constants/types';
+import { formatDate } from '@/constants/helpers';
 import { Ionicons } from '@expo/vector-icons';
 
 interface TransactionRowProps {
-  transaction: Transaction;
+  transaction: ReferralActivity;
 }
-
-const ICONS: Record<Transaction['type'], keyof typeof Ionicons.glyphMap> = {
-  deposit: 'arrow-down-circle',
-  withdrawal: 'arrow-up-circle',
-  'egg-income': 'trending-up',
-  purchase: 'cart-outline',
-};
 
 export function TransactionRow({ transaction }: TransactionRowProps) {
   const colors = useColors();
-  const isPositive = transaction.amount > 0;
-  const amountColor = isPositive ? colors.primary : colors.destructive;
-  const icon = ICONS[transaction.type];
+  const isReferral = transaction.type === 'referral-egg-bonus';
+  const icon: keyof typeof Ionicons.glyphMap = isReferral ? 'people' : 'egg-outline';
+  const tint = isReferral ? colors.accent : colors.primary;
 
   return (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
-      <View style={[styles.iconContainer, { backgroundColor: `${amountColor}15` }]}>
-        <Ionicons name={icon} size={20} color={amountColor} />
+      <View style={[styles.iconContainer, { backgroundColor: `${tint}15` }]}>
+        <Ionicons name={icon} size={20} color={tint} />
       </View>
       <View style={styles.content}>
-        <Text style={[styles.description, { color: colors.foreground }]} numberOfLines={1}>
+        <Text style={[styles.description, { color: colors.foreground }]} numberOfLines={2}>
           {transaction.description}
         </Text>
         <Text style={[styles.date, { color: colors.mutedForeground }]}>
           {formatDate(transaction.createdAt)}
         </Text>
       </View>
-      <Text style={[styles.amount, { color: amountColor }]}>
-        {isPositive ? '+' : ''}{formatNumber(transaction.amount)}
+      <Text style={[styles.amount, { color: colors.primary }]}>
+        +{transaction.quantity}
       </Text>
     </View>
   );

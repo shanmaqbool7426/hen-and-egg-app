@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Hen & Egg Farm Simulator",
+    "name": "HenFarm",
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,7 +16,9 @@
     "ios": {
       "supportsTablet": false
     },
-    "android": {},
+    "android": {
+      "package": "com.shanmaqbool33.mobile"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },

@@ -1,372 +1,215 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Platform, Pressable, TextInput, Alert } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, Platform, Pressable, RefreshControl
+} from 'react-native';
 import { useColors } from '@/hooks/useColors';
-import { useSimulation } from '@/contexts/SimulationContext';
+import { API_URL, useHenFarm } from '@/contexts/HenFarmApiContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { TransactionRow } from '@/components/TransactionRow';
-import { formatNumber } from '@/constants/helpers';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { formatNumber, formatDate } from '@/constants/helpers';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { cardShadow, heroShadow } from '@/constants/shadows';
+
+interface HenHoldingInfo {
+  _id: string;
+  quantity: number;
+  purchasedAt: string;
+  layingStartsAt: string;
+  expiresAt: string;
+  status: 'incubating' | 'laying';
+  daysRemaining: number;
+}
+
+interface HensSummary {
+  totalHens: number;
+  layingHens: number;
+  incubatingHens: number;
+  eggsPerDay: number;
+}
+
+const EMPTY_SUMMARY: HensSummary = { totalHens: 0, layingHens: 0, incubatingHens: 0, eggsPerDay: 0 };
 
 export default function WalletScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const {
-    virtualBalance,
-    transactions,
-    simState,
-    deposit,
-    requestWeeklyWithdrawal,
-    canWithdrawWeekly,
-    daysUntilWeeklyWithdrawal,
-    weeklyWithdrawalAmount,
-  } = useSimulation();
-  const [showDeposit, setShowDeposit] = useState(false);
-  const [amount, setAmount] = useState('');
-  const [visibleCount, setVisibleCount] = useState(20);
+  const router = useRouter();
+  const { user, availableEggs, totalEggsEarned, refreshData, authFetch } = useHenFarm();
 
-  const handleDeposit = () => {
-    const num = Number(amount);
-    if (num > 0) {
-      deposit(num);
-      setAmount('');
-      setShowDeposit(false);
+  const [holdings, setHoldings] = useState<HenHoldingInfo[]>([]);
+  const [summary, setSummary] = useState<HensSummary>(EMPTY_SUMMARY);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchMyHens = useCallback(async () => {
+    if (!user?._id) return;
+    try {
+      const res = await authFetch(`${API_URL}/orders/my-hens/${user._id}`);
+      const data = await res.json();
+      if (data.success) {
+        setHoldings(data.holdings || []);
+        setSummary(data.summary || EMPTY_SUMMARY);
+      }
+    } catch (e) {
+      console.error('Failed to load hens', e);
     }
-  };
+  }, [user?._id, authFetch]);
 
-  const handlePaymentDemo = (method: string) => {
-    Alert.alert(
-      'Demo Only',
-      `Real payments are disabled. This is an educational simulation. "${method}" is shown for demonstration purposes only.`
-    );
+  useFocusEffect(
+    useCallback(() => {
+      fetchMyHens();
+    }, [fetchMyHens])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([refreshData(), fetchMyHens()]);
+    setRefreshing(false);
   };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-       <View style={[styles.banner, { backgroundColor: colors.destructive }]}>
-        <Text style={[styles.bannerText, { color: colors.destructiveForeground }]}>
-          Virtual balances only. No real money is accepted or transferred.
-        </Text>
-      </View>
-
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: 20 },
+          { paddingTop: Platform.OS === 'web' ? 67 + 20 : insets.top + 20 },
           { paddingBottom: Platform.OS === 'web' ? 84 + 20 : insets.bottom + 84 + 20 },
         ]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.foreground }]}>Wallet</Text>
+          <Text style={[styles.title, { color: colors.foreground }]}>My Farm</Text>
         </View>
 
-        <View style={[styles.balanceCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.balanceLabel, { color: colors.mutedForeground }]}>Virtual Balance</Text>
-          <Text style={[styles.balanceValue, { color: colors.foreground }]}>{formatNumber(virtualBalance)}</Text>
-          <Text style={[styles.balanceSubtitle, { color: colors.mutedForeground }]}>Simulation Coins</Text>
-        </View>
-
-        {simState.phase !== 'collapsed' && (
-          <View style={styles.buttonsRow}>
-            <Pressable
-              onPress={() => {
-                setShowDeposit(!showDeposit);
-                setAmount('');
-              }}
-              style={({ pressed }) => [
-                styles.actionButton,
-                { backgroundColor: colors.primary },
-                pressed && styles.actionButtonPressed,
-              ]}
-            >
-              <Ionicons name="add-circle-outline" size={20} color={colors.primaryForeground} />
-              <Text style={[styles.actionButtonText, { color: colors.primaryForeground }]}>Deposit</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={requestWeeklyWithdrawal}
-              style={({ pressed }) => [
-                styles.actionButton,
-                {
-                  backgroundColor: canWithdrawWeekly ? colors.secondary : colors.muted,
-                  borderColor: colors.border,
-                  borderWidth: 1,
-                },
-                pressed && canWithdrawWeekly && styles.actionButtonPressed,
-              ]}
-            >
-              <Ionicons name="remove-circle-outline" size={20} color={colors.secondaryForeground} />
-              <Text style={[styles.actionButtonText, { color: canWithdrawWeekly ? colors.secondaryForeground : colors.mutedForeground }]}>
-                {canWithdrawWeekly ? 'Withdraw Weekly Balance' : `Available in ${daysUntilWeeklyWithdrawal} day(s)`}
+        {/* Seller Stock */}
+        {user?.role === 'seller' && (
+          <Pressable
+            style={[styles.sellerStockCard, { backgroundColor: colors.card }, cardShadow(colors)]}
+            onPress={() => router.push('/(tabs)/profile')}
+          >
+            <View style={[styles.henOrderIcon, { backgroundColor: colors.primary + '20' }]}>
+              <MaterialCommunityIcons name="storefront" size={24} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.henOrderTitle, { color: colors.foreground }]}>
+                {formatNumber(user.availableHens || 0)} hens in your selling stock
               </Text>
-            </Pressable>
-          </View>
-        )}
-
-        {showDeposit && (
-          <View style={[styles.inputCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.inputLabel, { color: colors.foreground }]}>Deposit Amount</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.input }]}
-              value={amount}
-              onChangeText={setAmount}
-              placeholder="0"
-              placeholderTextColor={colors.mutedForeground}
-              keyboardType="number-pad"
-            />
-            <Pressable
-              onPress={handleDeposit}
-              style={({ pressed }) => [
-                styles.submitButton,
-                { backgroundColor: colors.primary },
-                pressed && styles.submitButtonPressed,
-              ]}
-            >
-              <Text style={[styles.submitButtonText, { color: colors.primaryForeground }]}>Confirm Deposit</Text>
-            </Pressable>
-          </View>
-        )}
-
-        <View style={[styles.weeklyCard, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-          <View style={styles.weeklyHeader}>
-            <View>
-              <Text style={[styles.weeklyTitle, { color: colors.foreground }]}>Weekly virtual withdrawal</Text>
-              <Text style={[styles.weeklySubtitle, { color: colors.mutedForeground }]}>
-                {canWithdrawWeekly
-                  ? 'Your current virtual balance is ready.'
-                  : `Unlocks after ${daysUntilWeeklyWithdrawal} more simulated day(s).`}
+              <Text style={[styles.henOrderSubtitle, { color: colors.mutedForeground }]}>
+                Listed at Rs {formatNumber(user.henSellPrice || 0)}/hen - tap to update pricing
               </Text>
             </View>
-            <Ionicons name="calendar-outline" size={22} color={colors.primary} />
-          </View>
-          <Text style={[styles.weeklyAmount, { color: colors.foreground }]}>
-            {formatNumber(weeklyWithdrawalAmount)} virtual coins
-          </Text>
-          <Text style={[styles.weeklyNote, { color: colors.mutedForeground }]}>
-            This is a simulated withdrawal. It does not send money to a bank, wallet, or payment provider.
-          </Text>
-        </View>
-
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Transaction History</Text>
-
-        <View style={[styles.transactionsList, { backgroundColor: colors.card }]}>
-          {transactions.slice(0, visibleCount).map(tx => (
-            <TransactionRow key={tx.id} transaction={tx} />
-          ))}
-        </View>
-
-        {visibleCount < transactions.length && (
-          <Pressable
-            onPress={() => setVisibleCount(prev => prev + 20)}
-            style={({ pressed }) => [
-              styles.loadMoreButton,
-              { backgroundColor: colors.muted },
-              pressed && styles.loadMoreButtonPressed,
-            ]}
-          >
-            <Text style={[styles.loadMoreText, { color: colors.foreground }]}>Load More</Text>
+            <Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
           </Pressable>
         )}
 
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Payment Methods</Text>
+        {/* Egg Production */}
+        <LinearGradient
+          colors={[colors.primary, colors.accent]}
+          style={[styles.eggsCard, heroShadow(colors)]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.eggsIconCircle}>
+            <MaterialCommunityIcons name="egg" size={32} color="#FFFFFF" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.eggsLabel}>
+              {summary.layingHens > 0
+                ? `${summary.layingHens} hen${summary.layingHens > 1 ? 's' : ''} producing ${summary.eggsPerDay} egg${summary.eggsPerDay > 1 ? 's' : ''}/day`
+                : 'Eggs Ready to Sell'}
+            </Text>
+            <Text style={styles.eggsValue}>{formatNumber(availableEggs)}</Text>
+          </View>
+          {availableEggs > 0 && (
+            <Pressable style={styles.sellBtn} onPress={() => router.push('/(tabs)/farm')}>
+              <Text style={styles.sellBtnText}>Sell</Text>
+            </Pressable>
+          )}
+        </LinearGradient>
 
-        {['JazzCash', 'Easypaisa', 'Credit/Debit Card'].map(method => (
-          <Pressable
-            key={method}
-            onPress={() => handlePaymentDemo(method)}
-            style={({ pressed }) => [
-              styles.paymentCard,
-              { backgroundColor: colors.muted, borderColor: colors.border },
-              pressed && styles.paymentCardPressed,
-            ]}
-          >
-            <Ionicons name="lock-closed" size={20} color={colors.mutedForeground} />
-            <Text style={[styles.paymentText, { color: colors.mutedForeground }]}>{method} — unavailable</Text>
-            <View style={[styles.demoBadge, { backgroundColor: colors.destructive }]}>
-              <Text style={[styles.demoText, { color: colors.destructiveForeground }]}>Demo</Text>
+        {/* My Hens */}
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>My Hens</Text>
+          <Text style={[styles.sectionCount, { color: colors.mutedForeground }]}>{summary.totalHens} owned</Text>
+        </View>
+
+        {holdings.length === 0 ? (
+          <View style={[styles.emptyState, { backgroundColor: colors.card }, cardShadow(colors)]}>
+            <MaterialCommunityIcons name="egg-off" size={48} color={colors.mutedForeground} />
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No hens purchased yet</Text>
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+              Go to Marketplace to buy real hens from verified sellers.
+            </Text>
+          </View>
+        ) : (
+          holdings.map(h => (
+            <View key={h._id} style={[styles.henOrderCard, { backgroundColor: colors.card }, cardShadow(colors)]}>
+              <View style={[styles.henOrderIcon, { backgroundColor: (h.status === 'laying' ? '#0F9D58' : '#FF9100') + '20' }]}>
+                <MaterialCommunityIcons name="bird" size={24} color={h.status === 'laying' ? '#0F9D58' : '#FF9100'} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.henOrderTitle, { color: colors.foreground }]}>
+                  {h.quantity} hen{h.quantity > 1 ? 's' : ''} - bought {formatDate(h.purchasedAt)}
+                </Text>
+                <Text style={[styles.henOrderSubtitle, { color: colors.mutedForeground }]}>
+                  {h.status === 'incubating'
+                    ? `Incubating - starts laying in ${h.daysRemaining} day${h.daysRemaining > 1 ? 's' : ''}`
+                    : `Laying - ${h.daysRemaining} day${h.daysRemaining > 1 ? 's' : ''} left in this cycle`}
+                </Text>
+              </View>
+              <View style={[styles.statusBadge, { backgroundColor: (h.status === 'laying' ? '#0F9D58' : '#FF9100') + '20' }]}>
+                <Text style={[styles.statusBadgeText, { color: h.status === 'laying' ? '#0F9D58' : '#FF9100' }]}>
+                  {h.status === 'laying' ? 'Laying' : 'Incubating'}
+                </Text>
+              </View>
             </View>
-          </Pressable>
-        ))}
+          ))
+        )}
+
+        {/* Earnings Summary */}
+        <Pressable
+          style={[styles.sellerStockCard, { backgroundColor: colors.card }, cardShadow(colors)]}
+          onPress={() => router.push('/orders?tab=earnings')}
+        >
+          <View style={[styles.henOrderIcon, { backgroundColor: colors.primary + '20' }]}>
+            <MaterialCommunityIcons name="chart-line" size={24} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.henOrderTitle, { color: colors.foreground }]}>
+              {formatNumber(totalEggsEarned)} eggs earned so far
+            </Text>
+            <Text style={[styles.henOrderSubtitle, { color: colors.mutedForeground }]}>
+              View full earnings history →
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
+        </Pressable>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  banner: {
-    padding: 12,
-  },
-  bannerText: {
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
-    textAlign: 'center',
-    lineHeight: 16,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-  },
-  header: {
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontFamily: 'Inter_700Bold',
-  },
-  balanceCard: {
-    padding: 24,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  balanceLabel: {
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-    marginBottom: 8,
-  },
-  balanceValue: {
-    fontSize: 48,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: -1,
-    marginBottom: 4,
-  },
-  balanceSubtitle: {
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
-  },
-  buttonsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
-  },
-  actionButtonPressed: {
-    opacity: 0.7,
-  },
-  actionButtonText: {
-    fontSize: 15,
-    fontFamily: 'Inter_700Bold',
-  },
-  inputCard: {
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 20,
-  },
-  weeklyCard: {
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 24,
-  },
-  weeklyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 14,
-  },
-  weeklyTitle: {
-    fontSize: 16,
-    fontFamily: 'Inter_700Bold',
-    marginBottom: 4,
-  },
-  weeklySubtitle: {
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
-  },
-  weeklyAmount: {
-    fontSize: 24,
-    fontFamily: 'Inter_700Bold',
-    marginBottom: 8,
-  },
-  weeklyNote: {
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
-    lineHeight: 17,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
-    marginBottom: 8,
-  },
-  input: {
-    height: 50,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-    marginBottom: 12,
-    borderWidth: 1,
-  },
-  submitButton: {
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  submitButtonPressed: {
-    opacity: 0.7,
-  },
-  submitButtonText: {
-    fontSize: 15,
-    fontFamily: 'Inter_700Bold',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-    marginBottom: 12,
-  },
-  transactionsList: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
-  loadMoreButton: {
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  loadMoreButtonPressed: {
-    opacity: 0.7,
-  },
-  loadMoreText: {
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  paymentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 12,
-  },
-  paymentCardPressed: {
-    opacity: 0.7,
-  },
-  paymentText: {
-    flex: 1,
-    fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  demoBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  demoText: {
-    fontSize: 10,
-    fontFamily: 'Inter_700Bold',
-  },
+  container: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20 },
+  header: { marginBottom: 20 },
+  title: { fontSize: 28, fontFamily: 'Inter_700Bold' },
+  eggsCard: { flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 20, marginBottom: 24, gap: 14 },
+  eggsIconCircle: { width: 56, height: 56, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  eggsLabel: { fontSize: 13, fontFamily: 'Inter_500Medium', color: '#FFFFFF', opacity: 0.9, marginBottom: 4 },
+  eggsValue: { fontSize: 32, fontFamily: 'Inter_700Bold', color: '#FFFFFF', letterSpacing: -1 },
+  sellBtn: { backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12 },
+  sellBtnText: { color: '#FFFFFF', fontSize: 14, fontFamily: 'Inter_700Bold' },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sectionTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
+  sectionCount: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  henOrderCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, marginBottom: 10 },
+  sellerStockCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, marginBottom: 20 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  statusBadgeText: { fontSize: 11, fontFamily: 'Inter_700Bold' },
+  henOrderIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  henOrderTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold', marginBottom: 2 },
+  henOrderSubtitle: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  emptyState: { padding: 32, borderRadius: 16, alignItems: 'center', marginBottom: 20 },
+  emptyTitle: { fontSize: 15, fontFamily: 'Inter_700Bold', marginTop: 10 },
+  emptyText: { fontSize: 13, fontFamily: 'Inter_400Regular', textAlign: 'center', marginTop: 4 },
 });
