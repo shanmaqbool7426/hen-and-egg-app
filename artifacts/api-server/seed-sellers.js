@@ -64,6 +64,7 @@ const sellersToSeed = [
     whatsappNumber: '03069829158',
     dealerResponseMinutes: 15,
   },
+
   // 2. VERIFIED - 03047711033 - Full Rating 5.0 - 1000+ Hens - Egg Rate Rs 30
   {
     name: 'Chaudhry Bilal Layers & Farm',
