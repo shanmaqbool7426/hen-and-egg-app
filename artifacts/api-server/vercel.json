@@ -10,6 +10,10 @@
     {
       "source": "/api/:path*",
       "destination": "/api/handler"
+    },
+    {
+      "source": "/",
+      "destination": "/api/handler"
     }
   ]
 }

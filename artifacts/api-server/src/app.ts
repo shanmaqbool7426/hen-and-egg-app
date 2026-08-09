@@ -40,6 +40,12 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
 
+// Not used by the mobile app (which only ever calls /api/*), but a plain 200
+// here means Vercel's own deployment-preview screenshot (which visits bare
+// "/") stops showing a false "crashed" thumbnail.
+app.get("/", (_req, res) => {
+  res.json({ message: "HenFarm API - see /api/healthz" });
+});
 
 export default app;
 
