@@ -15,9 +15,10 @@ import { rm } from "node:fs/promises";
 // Node never has to resolve our internal module graph at runtime at all.
 //
 // Output goes to api/_lib/ (underscore-prefixed - Vercel's function router
-// ignores it) and the small static file at api/[...path].mjs (committed, not
-// generated) just re-exports from there. Vercel only ever treats that one
-// file as a real function - the daily-eggs cron is a normal Express route
+// ignores it) and the small static file at api/[...path].js (committed, not
+// generated, .js not .mjs - Vercel's catch-all route matching seems to need
+// it) just re-exports from there. Vercel only ever treats that one file as a
+// real function - the daily-eggs cron is a normal Express route
 // (src/routes/cron.ts) served through this same catch-all, not a second
 // Vercel function, because a second function nested under api/cron/ broke
 // this catch-all's routing for every other multi-segment path.

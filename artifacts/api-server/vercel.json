@@ -5,10 +5,5 @@
       "path": "/api/cron/daily-eggs",
       "schedule": "0 0 * * *"
     }
-  ],
-  "functions": {
-    "api/[...path].mjs": {
-      "maxDuration": 30
-    }
-  }
+  ]
 }
