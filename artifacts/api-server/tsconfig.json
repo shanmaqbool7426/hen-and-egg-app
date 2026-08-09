@@ -9,7 +9,7 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": ["src", "api"],
+  "include": ["src", "api", "_vercel-src"],
   "references": [
     {
       "path": "../../lib/db"

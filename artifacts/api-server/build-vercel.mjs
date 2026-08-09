@@ -10,20 +10,28 @@ import { rm } from "node:fs/promises";
 // (unlike our local esbuild-based build.mjs, or CommonJS require()) refuses
 // directory imports and extension-less relative imports. Rather than rewrite
 // every relative import across src/ with explicit .js extensions, this
-// bundles the two Vercel entry points (api-src/*) into single self-contained
-// files exactly like build.mjs already does for the traditional server - so
-// Node never has to resolve our internal module graph at runtime at all.
+// bundles the Vercel entry point (_vercel-src/[...path].ts) into a single
+// self-contained file exactly like build.mjs already does for the
+// traditional server - so Node never has to resolve our internal module
+// graph at runtime at all.
 //
-// Output goes to api/_lib/ (underscore-prefixed - Vercel's function router
-// ignores it) and the small static file at api/handler.js (committed, not
-// generated) just re-exports from there. vercel.json rewrites every /api/*
-// request to this one plain function (no [...path] bracket dynamic-route
-// filename - that consistently failed to match anything beyond a single path
-// segment on Vercel, for reasons that were never fully clear). Express's own
-// router then does the real routing from req.url, same as it always has.
-// The daily-eggs cron is a normal Express route (src/routes/cron.ts) served
-// through this same function, not a second Vercel function - an earlier
-// nested api/cron/ function broke routing for every other path too.
+// The source used to live at api-src/ - Vercel's zero-config function
+// detection picked it up too (despite it not being under api/), compiled it
+// WITHOUT bundling, and crashed on the exact same directory-import problem
+// this file exists to avoid. Renaming it to the underscore-prefixed
+// _vercel-src/ (Vercel explicitly never scans underscore-prefixed paths)
+// fixed that.
+//
+// Output goes to api/_lib/ (also underscore-prefixed, same reasoning) and
+// the small static file at api/handler.js (committed, not generated) just
+// re-exports from there. vercel.json rewrites every /api/* request (and "/")
+// to this one plain function - no [...path] bracket dynamic-route filename,
+// that consistently failed to match anything beyond a single path segment on
+// Vercel for reasons that were never fully clear. Express's own router then
+// does the real routing from req.url, same as it always has. The daily-eggs
+// cron is a normal Express route (src/routes/cron.ts) served through this
+// same function, not a second Vercel function - an earlier nested api/cron/
+// function broke routing for every other path too.
 
 globalThis.require = createRequire(import.meta.url);
 
@@ -119,7 +127,7 @@ async function buildAll() {
 
   await esbuild({
     entryPoints: [
-      { in: path.resolve(artifactDir, "api-src/[...path].ts"), out: "path-handler" },
+      { in: path.resolve(artifactDir, "_vercel-src/[...path].ts"), out: "path-handler" },
     ],
     platform: "node",
     bundle: true,
