@@ -1,7 +1,7 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttpImport from "pino-http";
-import router from "./routes";
+import router from "./routes/index";
 import { logger } from "./lib/logger";
 // connectDB and startDailyEggsJob are initialized in index.ts AFTER .env is loaded
 export { connectDB } from "./db/mongoose";
