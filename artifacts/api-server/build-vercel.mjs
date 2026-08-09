@@ -15,13 +15,15 @@ import { rm } from "node:fs/promises";
 // Node never has to resolve our internal module graph at runtime at all.
 //
 // Output goes to api/_lib/ (underscore-prefixed - Vercel's function router
-// ignores it) and the small static file at api/[...path].js (committed, not
-// generated, .js not .mjs - Vercel's catch-all route matching seems to need
-// it) just re-exports from there. Vercel only ever treats that one file as a
-// real function - the daily-eggs cron is a normal Express route
-// (src/routes/cron.ts) served through this same catch-all, not a second
-// Vercel function, because a second function nested under api/cron/ broke
-// this catch-all's routing for every other multi-segment path.
+// ignores it) and the small static file at api/handler.js (committed, not
+// generated) just re-exports from there. vercel.json rewrites every /api/*
+// request to this one plain function (no [...path] bracket dynamic-route
+// filename - that consistently failed to match anything beyond a single path
+// segment on Vercel, for reasons that were never fully clear). Express's own
+// router then does the real routing from req.url, same as it always has.
+// The daily-eggs cron is a normal Express route (src/routes/cron.ts) served
+// through this same function, not a second Vercel function - an earlier
+// nested api/cron/ function broke routing for every other path too.
 
 globalThis.require = createRequire(import.meta.url);
 
