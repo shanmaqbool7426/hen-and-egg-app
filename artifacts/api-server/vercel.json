@@ -1,4 +1,5 @@
 {
+  "buildCommand": "node build-vercel.mjs",
   "crons": [
     {
       "path": "/api/cron/daily-eggs",
@@ -6,10 +7,10 @@
     }
   ],
   "functions": {
-    "api/[...path].ts": {
+    "api/[...path].mjs": {
       "maxDuration": 30
     },
-    "api/cron/daily-eggs.ts": {
+    "api/cron/daily-eggs.mjs": {
       "maxDuration": 30
     }
   }
