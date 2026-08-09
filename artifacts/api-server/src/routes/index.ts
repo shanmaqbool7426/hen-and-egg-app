@@ -4,6 +4,7 @@ import authRouter from "./auth";
 import marketplaceRouter from "./marketplace";
 import ordersRouter from "./orders";
 import adminRouter from "./admin";
+import cronRouter from "./cron";
 
 const router: IRouter = Router();
 
@@ -12,5 +13,6 @@ router.use('/auth', authRouter);
 router.use('/marketplace', marketplaceRouter);
 router.use('/orders', ordersRouter);
 router.use('/admin', adminRouter);
+router.use('/cron', cronRouter);
 
 export default router;

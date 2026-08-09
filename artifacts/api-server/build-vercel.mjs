@@ -15,9 +15,12 @@ import { rm } from "node:fs/promises";
 // Node never has to resolve our internal module graph at runtime at all.
 //
 // Output goes to api/_lib/ (underscore-prefixed - Vercel's function router
-// ignores it) and the small static files at api/[...path].mjs and
-// api/cron/daily-eggs.mjs (committed, not generated) just re-export from
-// there. Vercel only ever treats those two as real functions.
+// ignores it) and the small static file at api/[...path].mjs (committed, not
+// generated) just re-exports from there. Vercel only ever treats that one
+// file as a real function - the daily-eggs cron is a normal Express route
+// (src/routes/cron.ts) served through this same catch-all, not a second
+// Vercel function, because a second function nested under api/cron/ broke
+// this catch-all's routing for every other multi-segment path.
 
 globalThis.require = createRequire(import.meta.url);
 
@@ -114,7 +117,6 @@ async function buildAll() {
   await esbuild({
     entryPoints: [
       { in: path.resolve(artifactDir, "api-src/[...path].ts"), out: "path-handler" },
-      { in: path.resolve(artifactDir, "api-src/cron/daily-eggs.ts"), out: "cron-daily-eggs" },
     ],
     platform: "node",
     bundle: true,

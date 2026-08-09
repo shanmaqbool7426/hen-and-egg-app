@@ -9,9 +9,6 @@
   "functions": {
     "api/[...path].mjs": {
       "maxDuration": 30
-    },
-    "api/cron/daily-eggs.mjs": {
-      "maxDuration": 30
     }
   }
 }
