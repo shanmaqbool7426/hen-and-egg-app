@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable, Platform, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Pressable, Platform, Image, ScrollView, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColors } from '@/hooks/useColors';
 import { useHenFarm } from '@/contexts/HenFarmApiContext';
@@ -70,51 +70,54 @@ export default function RegisterScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#0F172A', '#1E293B']}
-      style={styles.container}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 0, y: 1 }}
-    >
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <LinearGradient
+        colors={[colors.primary, colors.accent]}
+        style={[styles.header, { paddingTop: Platform.OS === 'web' ? 50 : insets.top + 24 }]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <View style={styles.headerBadge}>
+          <Image source={require('@/assets/images/icon_3.png')} style={styles.headerBadgeImage} />
+        </View>
+        <Text style={styles.title}>Join HenFarm</Text>
+        <Text style={styles.subtitle}>Real hens & eggs marketplace</Text>
+      </LinearGradient>
+
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: Platform.OS === 'web' ? 50 : insets.top + 20 },
           { paddingBottom: Platform.OS === 'web' ? 40 : insets.bottom + 30 },
         ]}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Join HenFarm's real hens & eggs marketplace</Text>
-        </View>
-
         <View style={styles.formContainer}>
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
             {/* Full Name */}
-            <Text style={styles.inputLabel}>Full Name</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="person-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
+            <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Full Name</Text>
+            <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Ionicons name="person-outline" size={20} color={colors.mutedForeground} style={styles.inputIcon} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: colors.foreground }]}
                 value={name}
                 onChangeText={setName}
                 placeholder="John Doe"
-                placeholderTextColor="#64748B"
+                placeholderTextColor={colors.mutedForeground}
                 autoCapitalize="words"
               />
             </View>
 
             {/* Email */}
-            <Text style={styles.inputLabel}>Email Address</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="mail-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
+            <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Email Address</Text>
+            <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Ionicons name="mail-outline" size={20} color={colors.mutedForeground} style={styles.inputIcon} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: colors.foreground }]}
                 value={email}
                 onChangeText={setEmail}
                 placeholder="your@email.com"
-                placeholderTextColor="#64748B"
+                placeholderTextColor={colors.mutedForeground}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -122,15 +125,15 @@ export default function RegisterScreen() {
             </View>
 
             {/* Password */}
-            <Text style={styles.inputLabel}>Password</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
+            <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Password</Text>
+            <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Ionicons name="lock-closed-outline" size={20} color={colors.mutedForeground} style={styles.inputIcon} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: colors.foreground }]}
                 value={password}
                 onChangeText={setPassword}
                 placeholder="••••••••"
-                placeholderTextColor="#64748B"
+                placeholderTextColor={colors.mutedForeground}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
               />
@@ -142,21 +145,21 @@ export default function RegisterScreen() {
                 <Ionicons
                   name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                   size={22}
-                  color="#94A3B8"
+                  color={colors.mutedForeground}
                 />
               </Pressable>
             </View>
 
             {/* Confirm Password */}
-            <Text style={styles.inputLabel}>Confirm Password</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
+            <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Confirm Password</Text>
+            <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Ionicons name="lock-closed-outline" size={20} color={colors.mutedForeground} style={styles.inputIcon} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: colors.foreground }]}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 placeholder="••••••••"
-                placeholderTextColor="#64748B"
+                placeholderTextColor={colors.mutedForeground}
                 secureTextEntry={!showConfirmPassword}
                 autoCapitalize="none"
               />
@@ -168,21 +171,21 @@ export default function RegisterScreen() {
                 <Ionicons
                   name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
                   size={22}
-                  color="#94A3B8"
+                  color={colors.mutedForeground}
                 />
               </Pressable>
             </View>
 
             {/* Referral Code (optional) */}
-            <Text style={styles.inputLabel}>Referral Code (optional)</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="people-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
+            <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Referral Code (optional)</Text>
+            <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Ionicons name="people-outline" size={20} color={colors.mutedForeground} style={styles.inputIcon} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: colors.foreground }]}
                 value={referralCode}
                 onChangeText={setReferralCode}
                 placeholder="e.g. HF123456"
-                placeholderTextColor="#64748B"
+                placeholderTextColor={colors.mutedForeground}
                 autoCapitalize="characters"
                 autoCorrect={false}
               />
@@ -193,10 +196,10 @@ export default function RegisterScreen() {
               onPress={() => setAgreedToTerms(!agreedToTerms)}
               style={styles.checkboxRow}
             >
-              <View style={[styles.checkbox, agreedToTerms && styles.checkboxActive]}>
+              <View style={[styles.checkbox, { borderColor: colors.border }, agreedToTerms && { backgroundColor: colors.primary, borderColor: colors.primary }]}>
                 {agreedToTerms && <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
               </View>
-              <Text style={styles.checkboxLabel}>
+              <Text style={[styles.checkboxLabel, { color: colors.mutedForeground }]}>
                 I accept the terms & conditions of HenFarm Platform.
               </Text>
             </Pressable>
@@ -207,6 +210,7 @@ export default function RegisterScreen() {
               disabled={isLoading}
               style={({ pressed }) => [
                 styles.submitButton,
+                { backgroundColor: colors.primary, shadowColor: colors.primary },
                 pressed && styles.buttonPressed,
                 isLoading && styles.buttonDisabled,
               ]}
@@ -223,17 +227,17 @@ export default function RegisterScreen() {
 
             {/* Footer Row */}
             <View style={styles.footerRow}>
-              <Text style={styles.footerText}>Already have an account? </Text>
+              <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Already have an account? </Text>
               <Link href="/(auth)/login" asChild>
                 <Pressable hitSlop={10}>
-                  <Text style={styles.linkText}>Sign In</Text>
+                  <Text style={[styles.linkText, { color: colors.primary }]}>Sign In</Text>
                 </Pressable>
               </Link>
             </View>
           </View>
         </View>
       </ScrollView>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -241,56 +245,65 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
   header: {
     alignItems: 'center',
-    marginBottom: 24,
+    paddingBottom: 28,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+  },
+  headerBadge: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  headerBadgeImage: {
+    width: 40,
+    height: 40,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 20,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontFamily: 'Inter_700Bold',
     color: '#FFFFFF',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    color: '#94A3B8',
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    color: 'rgba(255,255,255,0.9)',
   },
   formContainer: {
     width: '100%',
     maxWidth: 420,
+    alignSelf: 'center',
+    marginTop: -20,
   },
   card: {
-    backgroundColor: '#1E293B',
     borderRadius: 24,
     padding: 24,
-    borderWidth: 1,
-    borderColor: '#334155',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.08,
     shadowRadius: 24,
-    elevation: 8,
+    elevation: 4,
   },
   inputLabel: {
     fontSize: 13,
     fontFamily: 'Inter_600SemiBold',
-    color: '#CBD5E1',
     marginBottom: 8,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
+    borderWidth: 1.5,
     paddingHorizontal: 14,
     marginBottom: 16,
     height: 52,
@@ -301,7 +314,6 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: '100%',
-    color: '#F8FAFC',
     fontSize: 15,
     fontFamily: 'Inter_400Regular',
   },
@@ -319,30 +331,22 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: '#64748B',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
-  },
-  checkboxActive: {
-    backgroundColor: '#6366F1',
-    borderColor: '#6366F1',
   },
   checkboxLabel: {
     flex: 1,
     fontSize: 13,
     fontFamily: 'Inter_400Regular',
-    color: '#CBD5E1',
     lineHeight: 18,
   },
   submitButton: {
     height: 52,
     borderRadius: 14,
-    backgroundColor: '#6366F1',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
-    shadowColor: '#6366F1',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
@@ -370,15 +374,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 20,
+    marginBottom: 20,
   },
   footerText: {
     fontSize: 14,
     fontFamily: 'Inter_400Regular',
-    color: '#94A3B8',
   },
   linkText: {
     fontSize: 14,
     fontFamily: 'Inter_700Bold',
-    color: '#818CF8',
   },
 });

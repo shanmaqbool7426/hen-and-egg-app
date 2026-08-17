@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Platform, Pressable,
-  TextInput, ActivityIndicator, Alert
+  TextInput, ActivityIndicator, Alert, Image, ImageBackground
 } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useHenFarm } from '@/contexts/HenFarmApiContext';
@@ -139,9 +139,17 @@ export default function ProfileScreen() {
         ]}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.foreground }]}>My Profile</Text>
-        </View>
+        <ImageBackground
+          source={require('@/assets/images/splash-bg.png')}
+          style={styles.header}
+          imageStyle={styles.headerImage}
+        >
+          <View style={styles.headerOverlay} />
+          <View style={styles.headerBadge}>
+            <Image source={require('@/assets/images/icon_3.png')} style={styles.headerBadgeImage} />
+          </View>
+          <Text style={styles.title}>My Profile</Text>
+        </ImageBackground>
 
         {/* Identity Card */}
         <LinearGradient
@@ -239,9 +247,33 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { paddingHorizontal: 20 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    borderRadius: 24,
+    padding: 20,
+    minHeight: 90,
+    overflow: 'hidden',
+  },
+  headerImage: { borderRadius: 24 },
+  headerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10,46,26,0.45)',
+    borderRadius: 24,
+  },
+  headerBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  headerBadgeImage: { width: 22, height: 22 },
   backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 20, fontFamily: 'Inter_700Bold' },
+  title: { fontSize: 20, fontFamily: 'Inter_700Bold', color: '#FFFFFF' },
   identityCard: { padding: 24, borderRadius: 20, alignItems: 'center', marginBottom: 20 },
   avatarCircle: {
     width: 72, height: 72, borderRadius: 36,

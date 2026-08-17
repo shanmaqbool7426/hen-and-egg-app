@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Platform, Pressable,
-  Modal, TextInput, ActivityIndicator, RefreshControl,
+  Modal, TextInput, ActivityIndicator, RefreshControl, Image, ImageBackground,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColors } from '@/hooks/useColors';
@@ -159,20 +159,28 @@ export default function MarketplaceScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         {/* Header */}
-        <View style={styles.header}>
+        <ImageBackground
+          source={require('@/assets/images/splash-bg.png')}
+          style={styles.header}
+          imageStyle={styles.headerImage}
+        >
+          <View style={styles.headerOverlay} />
+          <View style={styles.headerBadge}>
+            <Image source={require('@/assets/images/icon_3.png')} style={styles.headerBadgeImage} />
+          </View>
           <View>
-            <Text style={[styles.title, { color: colors.foreground }]}>Marketplace</Text>
-            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+            <Text style={styles.title}>Marketplace</Text>
+            <Text style={styles.subtitle}>
               Buy hens or sell eggs with verified dealers
             </Text>
           </View>
           <Pressable
             onPress={fetchSellers}
-            style={[styles.refreshBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={styles.refreshBtn}
           >
-            <Ionicons name="refresh" size={20} color={colors.primary} />
+            <Ionicons name="refresh" size={20} color="#FFFFFF" />
           </Pressable>
-        </View>
+        </ImageBackground>
 
         {/* Eggs Info Banner */}
         {availableEggs > 0 && (
@@ -203,7 +211,7 @@ export default function MarketplaceScreen() {
         {/* Empty State */}
         {!loading && sellers.length === 0 && (
           <View style={[styles.emptyState, { backgroundColor: colors.card }, cardShadow(colors)]}>
-            <MaterialCommunityIcons name="store-off" size={56} color={colors.mutedForeground} />
+            <Image source={require('@/assets/images/icon_3.png')} style={styles.emptyStateImage} />
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No Sellers Available</Text>
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
               No sellers are listing hens right now. Pull down to refresh!
@@ -525,16 +533,41 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     marginBottom: 20,
+    borderRadius: 24,
+    padding: 20,
+    paddingTop: 16,
+    minHeight: 120,
+    overflow: 'hidden',
   },
-  title: { fontSize: 28, fontFamily: 'Inter_700Bold', marginBottom: 2 },
-  subtitle: { fontSize: 13, fontFamily: 'Inter_400Regular' },
+  headerImage: {
+    borderRadius: 24,
+  },
+  headerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10,46,26,0.45)',
+    borderRadius: 24,
+  },
+  headerBadge: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerBadgeImage: { width: 20, height: 20 },
+  title: { fontSize: 28, fontFamily: 'Inter_700Bold', marginBottom: 2, color: '#FFFFFF', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  subtitle: { fontSize: 13, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.9)' },
   refreshBtn: {
     width: 42,
     height: 42,
     borderRadius: 12,
-    borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -556,6 +589,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 20,
   },
+  emptyStateImage: { width: 72, height: 72, opacity: 0.5 },
   emptyTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', marginTop: 16, marginBottom: 8 },
   emptyText: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', lineHeight: 20 },
   sectionTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', marginBottom: 16, opacity: 0.8 },

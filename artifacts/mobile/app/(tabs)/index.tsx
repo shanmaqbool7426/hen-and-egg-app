@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Image, ImageBackground } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { API_URL, useHenFarm } from '@/contexts/HenFarmApiContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -66,12 +66,20 @@ export default function HomeScreen() {
         ]}
       >
         {/* Welcome Header */}
-        <View style={styles.header}>
+        <ImageBackground
+          source={require('@/assets/images/splash-bg.png')}
+          style={styles.header}
+          imageStyle={styles.headerImage}
+        >
+          <View style={styles.headerOverlay} />
+          <View style={styles.headerBadge}>
+            <Image source={require('@/assets/images/icon_3.png')} style={styles.headerBadgeImage} />
+          </View>
           <View style={styles.headerGreeting}>
-            <Text style={[styles.greeting, { color: colors.foreground }]} numberOfLines={1}>
+            <Text style={styles.greeting} numberOfLines={1}>
               Welcome back, {user?.name?.split(' ')[0] || 'Friend'}!
             </Text>
-            <Text style={[styles.subGreeting, { color: colors.mutedForeground }]}>
+            <Text style={styles.subGreeting}>
               Real hens, real eggs, real orders
             </Text>
           </View>
@@ -87,10 +95,10 @@ export default function HomeScreen() {
                 }
               }}
             >
-              <Ionicons name="refresh" size={20} color={colors.mutedForeground} />
+              <Ionicons name="refresh" size={20} color="#FFFFFF" />
             </Pressable>
           </View>
-        </View>
+        </ImageBackground>
 
         {/* Eggs Ready Card */}
         <LinearGradient
@@ -270,21 +278,54 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'flex-end',
     marginBottom: 20,
+    borderRadius: 24,
+    padding: 20,
+    paddingTop: 16,
+    minHeight: 130,
+    overflow: 'hidden',
+  },
+  headerImage: {
+    borderRadius: 24,
+  },
+  headerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10,46,26,0.45)',
+    borderRadius: 24,
+  },
+  headerBadge: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerBadgeImage: {
+    width: 22,
+    height: 22,
   },
   headerGreeting: {
     flex: 1,
     marginRight: 12,
   },
   greeting: {
-    fontSize: 24,
+    fontSize: 22,
     fontFamily: 'Inter_700Bold',
     marginBottom: 4,
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   subGreeting: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Inter_400Regular',
+    color: 'rgba(255,255,255,0.9)',
   },
   headerActions: {
     flexDirection: 'row',
@@ -293,7 +334,9 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   refreshButton: {
-    padding: 6,
+    padding: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 10,
   },
   avatarButton: {
     width: 36,

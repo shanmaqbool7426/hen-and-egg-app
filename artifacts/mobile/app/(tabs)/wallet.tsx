@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Platform, Pressable, RefreshControl
+  View, Text, StyleSheet, ScrollView, Platform, Pressable, RefreshControl, Image, ImageBackground
 } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { API_URL, useHenFarm } from '@/contexts/HenFarmApiContext';
@@ -76,9 +76,17 @@ export default function WalletScreen() {
         ]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.foreground }]}>My Farm</Text>
-        </View>
+        <ImageBackground
+          source={require('@/assets/images/splash-bg.png')}
+          style={styles.header}
+          imageStyle={styles.headerImage}
+        >
+          <View style={styles.headerOverlay} />
+          <View style={styles.headerBadge}>
+            <Image source={require('@/assets/images/icon_3.png')} style={styles.headerBadgeImage} />
+          </View>
+          <Text style={styles.title}>My Farm</Text>
+        </ImageBackground>
 
         {/* Seller Stock */}
         {user?.role === 'seller' && (
@@ -134,7 +142,7 @@ export default function WalletScreen() {
 
         {holdings.length === 0 ? (
           <View style={[styles.emptyState, { backgroundColor: colors.card }, cardShadow(colors)]}>
-            <MaterialCommunityIcons name="egg-off" size={48} color={colors.mutedForeground} />
+            <Image source={require('@/assets/images/icon_3.png')} style={{ width: 64, height: 64, opacity: 0.5 }} />
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No hens purchased yet</Text>
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
               Go to Marketplace to buy real hens from verified sellers.
@@ -191,8 +199,33 @@ export default function WalletScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { paddingHorizontal: 20 },
-  header: { marginBottom: 20 },
-  title: { fontSize: 28, fontFamily: 'Inter_700Bold' },
+  header: {
+    marginBottom: 20,
+    borderRadius: 24,
+    padding: 20,
+    minHeight: 110,
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+  },
+  headerImage: { borderRadius: 24 },
+  headerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10,46,26,0.45)',
+    borderRadius: 24,
+  },
+  headerBadge: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerBadgeImage: { width: 20, height: 20 },
+  title: { fontSize: 28, fontFamily: 'Inter_700Bold', color: '#FFFFFF', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   eggsCard: { flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 20, marginBottom: 24, gap: 14 },
   eggsIconCircle: { width: 56, height: 56, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   eggsLabel: { fontSize: 13, fontFamily: 'Inter_500Medium', color: '#FFFFFF', opacity: 0.9, marginBottom: 4 },

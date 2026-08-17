@@ -25,7 +25,7 @@ npx expo start --clear --lan
 ```
 
 ## MongoDB Status: ❌ Disconnected (Using In-Memory Fallback)
-- **Connection String**: `mongodb+srv://shanmaqbool33_db_user:VicgUI67cdOTq8SE@formhen.47vpwct.mongodb.net/henform`
+- **Connection String**: stored in `.env` as `MONGODB_URI` (not committed — see backend README)
 - **Issue**: ECONNREFUSED (Network can't reach MongoDB Atlas)
 - **Fallback**: In-memory test users are working
 

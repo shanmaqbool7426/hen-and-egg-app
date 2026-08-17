@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable, Platform, Image, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Pressable, Platform, Image, ImageBackground, ScrollView, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColors } from '@/hooks/useColors';
 import { useHenFarm } from '@/contexts/HenFarmApiContext';
@@ -56,44 +56,48 @@ export default function LoginScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#0F172A', '#1E293B']}
-      style={styles.container}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 0, y: 1 }}
-    >
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: Platform.OS === 'web' ? 50 : insets.top + 30 },
-          { paddingBottom: Platform.OS === 'web' ? 40 : insets.bottom + 30 },
-        ]}
+        contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {/* Brand Header */}
-        <View style={styles.header}>
-          <View style={styles.logoBadge}>
-            <Image source={require('@/assets/images/icon.png')} style={styles.logo} />
-          </View>
+        {/* Farm Hero */}
+        <ImageBackground
+          source={require('@/assets/images/splash-bg.png')}
+          style={[styles.hero, { paddingTop: Platform.OS === 'web' ? 50 : insets.top + 20 }]}
+          resizeMode="cover"
+        >
+          <LinearGradient
+            colors={['rgba(10,46,26,0.35)', 'rgba(10,46,26,0.05)']}
+            style={StyleSheet.absoluteFill}
+          />
           <Text style={styles.appName}>HenFarm</Text>
           <Text style={styles.appTagline}>REAL HENS & EGGS MARKETPLACE</Text>
-        </View>
+        </ImageBackground>
 
         {/* Card Form */}
         <View style={styles.formContainer}>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Sign In to Account</Text>
+          <View style={[styles.logoBadge, { backgroundColor: colors.card, borderColor: colors.background }]}>
+            <Image source={require('@/assets/images/icon.png')} style={styles.logo} />
+          </View>
+
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
+            <Text style={[styles.cardTitle, { color: colors.foreground }]}>Welcome back!</Text>
+            <Text style={[styles.cardSubtitle, { color: colors.mutedForeground }]}>
+              Sign in to check on your hens and eggs
+            </Text>
 
             {/* Email Field */}
-            <Text style={styles.inputLabel}>Email Address</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="mail-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
+            <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Email Address</Text>
+            <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Ionicons name="mail-outline" size={20} color={colors.mutedForeground} style={styles.inputIcon} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: colors.foreground }]}
                 value={email}
                 onChangeText={setEmail}
                 placeholder="your@email.com"
-                placeholderTextColor="#64748B"
+                placeholderTextColor={colors.mutedForeground}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -101,15 +105,15 @@ export default function LoginScreen() {
             </View>
 
             {/* Password Field with Eye Icon Toggle */}
-            <Text style={styles.inputLabel}>Password</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
+            <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Password</Text>
+            <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Ionicons name="lock-closed-outline" size={20} color={colors.mutedForeground} style={styles.inputIcon} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: colors.foreground }]}
                 value={password}
                 onChangeText={setPassword}
                 placeholder="••••••••"
-                placeholderTextColor="#64748B"
+                placeholderTextColor={colors.mutedForeground}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
               />
@@ -121,7 +125,7 @@ export default function LoginScreen() {
                 <Ionicons
                   name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                   size={22}
-                  color="#94A3B8"
+                  color={colors.mutedForeground}
                 />
               </Pressable>
             </View>
@@ -132,6 +136,7 @@ export default function LoginScreen() {
               disabled={isLoading}
               style={({ pressed }) => [
                 styles.submitButton,
+                { backgroundColor: colors.primary, shadowColor: colors.primary },
                 pressed && styles.buttonPressed,
                 isLoading && styles.buttonDisabled,
               ]}
@@ -148,17 +153,17 @@ export default function LoginScreen() {
 
             {/* Footer Navigation */}
             <View style={styles.footerRow}>
-              <Text style={styles.footerText}>Don't have an account? </Text>
+              <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Don't have an account? </Text>
               <Link href="/(auth)/register" asChild>
                 <Pressable hitSlop={10}>
-                  <Text style={styles.linkText}>Register</Text>
+                  <Text style={[styles.linkText, { color: colors.primary }]}>Register</Text>
                 </Pressable>
               </Link>
             </View>
           </View>
         </View>
       </ScrollView>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -168,82 +173,94 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
   },
-  header: {
+  hero: {
+    height: 260,
     alignItems: 'center',
-    marginBottom: 32,
-  },
-  logoBadge: {
-    width: 84,
-    height: 84,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-  },
-  logo: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
+    justifyContent: 'flex-end',
+    paddingBottom: 56,
+    overflow: 'hidden',
   },
   appName: {
-    fontSize: 32,
+    fontSize: 34,
     fontFamily: 'Inter_700Bold',
     color: '#FFFFFF',
     letterSpacing: -0.5,
+    textShadowColor: 'rgba(0,0,0,0.25)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
   },
   appTagline: {
     fontSize: 11,
     fontFamily: 'Inter_700Bold',
-    color: '#94A3B8',
+    color: '#FFFFFF',
+    opacity: 0.9,
     letterSpacing: 1.5,
     marginTop: 4,
+    textShadowColor: 'rgba(0,0,0,0.25)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   formContainer: {
     width: '100%',
     maxWidth: 420,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    marginTop: -48,
+  },
+  logoBadge: {
+    width: 88,
+    height: 88,
+    borderRadius: 26,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: -44,
+    zIndex: 1,
+    borderWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  logo: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
   },
   card: {
-    backgroundColor: '#1E293B',
-    borderRadius: 24,
+    borderRadius: 28,
     padding: 24,
-    borderWidth: 1,
-    borderColor: '#334155',
+    paddingTop: 56,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.08,
     shadowRadius: 24,
-    elevation: 8,
+    elevation: 4,
   },
   cardTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontFamily: 'Inter_700Bold',
-    color: '#F8FAFC',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  cardSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    textAlign: 'center',
     marginBottom: 24,
   },
   inputLabel: {
     fontSize: 13,
     fontFamily: 'Inter_600SemiBold',
-    color: '#CBD5E1',
     marginBottom: 8,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
+    borderWidth: 1.5,
     paddingHorizontal: 14,
     marginBottom: 20,
     height: 52,
@@ -254,7 +271,6 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: '100%',
-    color: '#F8FAFC',
     fontSize: 15,
     fontFamily: 'Inter_400Regular',
   },
@@ -264,11 +280,9 @@ const styles = StyleSheet.create({
   submitButton: {
     height: 52,
     borderRadius: 14,
-    backgroundColor: '#6366F1',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
-    shadowColor: '#6366F1',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
@@ -300,11 +314,9 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 14,
     fontFamily: 'Inter_400Regular',
-    color: '#94A3B8',
   },
   linkText: {
     fontSize: 14,
     fontFamily: 'Inter_700Bold',
-    color: '#818CF8',
   },
 });

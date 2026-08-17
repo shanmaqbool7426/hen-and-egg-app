@@ -5,9 +5,7 @@ import { AppNotification } from '@/constants/types';
 import { Platform } from 'react-native';
 
 const getApiUrl = () => {
-  if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
-  if (Platform.OS === 'web') return 'http://localhost:3000/api';
-  return 'http://192.168.100.5:3000/api';
+  return 'https://hen-farm-backend-chi.vercel.app/api';
 };
 
 export const API_URL = getApiUrl();
@@ -108,12 +106,17 @@ async function rawApiCall(endpoint: string, method: string = 'GET', data?: any, 
     const result = await response.json();
 
     if (!result.success) {
-      throw new Error(result.error || 'API request failed');
+      const err: any = new Error(result.error || 'API request failed');
+      err.status = response.status;
+      throw err;
     }
 
     return result;
   } catch (error) {
-    console.error('API Error:', error);
+    const msg = (error as any)?.message || '';
+    if (!msg.includes('User not found') && !msg.includes('Failed to get user') && !msg.includes('Invalid or expired session')) {
+      console.warn('API Notice:', msg || error);
+    }
     throw error;
   }
 }
@@ -146,42 +149,59 @@ export function HenFarmProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       const effectiveToken = authToken !== undefined ? authToken : token;
-      const userResult = await rawApiCall(`/auth/user/${userId}`, 'GET', undefined, effectiveToken);
-      setUser(userResult.user);
 
-      const activityResult = await rawApiCall(`/orders/referral-activity/${userId}`, 'GET', undefined, effectiveToken);
-      setReferralActivity(activityResult.activity);
-      setTotalEggsEarned(activityResult.totalEarned || 0);
-    } catch (error) {
-      console.error('Failed to load user data:', error);
-      throw error; // Re-throw so the caller can handle it
+      try {
+        const userResult = await rawApiCall(`/auth/user/${userId}`, 'GET', undefined, effectiveToken);
+        if (userResult?.user) {
+          setUser(userResult.user);
+          await AsyncStorage.setItem('@henfarm/userData', JSON.stringify(userResult.user));
+        }
+      } catch (err: any) {
+        const msg = err?.message || '';
+        if (msg.includes('Invalid or expired session')) {
+          setUser(null);
+          setToken(null);
+          await AsyncStorage.multiRemove(['@henfarm/userId', '@henfarm/token', '@henfarm/userData']);
+          return;
+        }
+      }
+
+      try {
+        const activityResult = await rawApiCall(`/orders/referral-activity/${userId}`, 'GET', undefined, effectiveToken);
+        setReferralActivity(activityResult.activity || []);
+        setTotalEggsEarned(activityResult.totalEarned || 0);
+      } catch (err) {
+        // Silently ignore referral activity errors
+      }
     } finally {
       setIsLoading(false);
     }
   }, [token]);
 
-  // Load user ID + token from storage and fetch data
+  // Load user ID + token + cached user profile from storage on app boot
   useEffect(() => {
     (async () => {
       try {
-        const [userId, storedToken] = await Promise.all([
+        const [userId, storedToken, storedUser] = await Promise.all([
           AsyncStorage.getItem('@henfarm/userId'),
           AsyncStorage.getItem('@henfarm/token'),
+          AsyncStorage.getItem('@henfarm/userData'),
         ]);
 
         if (userId && storedToken) {
           setToken(storedToken);
+          if (storedUser) {
+            try {
+              setUser(JSON.parse(storedUser));
+            } catch {}
+          }
           try {
             await loadUserData(userId, storedToken);
           } catch (loadErr) {
-            // Failed to load user data - clear stored session and continue
-            console.log('Failed to load user data, clearing storage');
-            await AsyncStorage.multiRemove(['@henfarm/userId', '@henfarm/token']);
-            setToken(null);
+            // Keep cached user profile if network refresh fails
           }
         } else if (userId) {
-          // Legacy session saved before auth tokens existed - must re-login.
-          await AsyncStorage.removeItem('@henfarm/userId');
+          await AsyncStorage.multiRemove(['@henfarm/userId', '@henfarm/token', '@henfarm/userData']);
         }
       } catch (err) {
         console.error('Load error:', err);
@@ -204,8 +224,11 @@ export function HenFarmProvider({ children }: { children: React.ReactNode }) {
 
       setUser(result.user);
       setToken(result.token);
-      await AsyncStorage.setItem('@henfarm/userId', result.user._id);
-      await AsyncStorage.setItem('@henfarm/token', result.token);
+      await Promise.all([
+        AsyncStorage.setItem('@henfarm/userId', result.user._id),
+        AsyncStorage.setItem('@henfarm/token', result.token),
+        AsyncStorage.setItem('@henfarm/userData', JSON.stringify(result.user)),
+      ]);
       await loadUserData(result.user._id, result.token);
     } catch (error) {
       console.error('Login failed:', error);
@@ -230,8 +253,11 @@ export function HenFarmProvider({ children }: { children: React.ReactNode }) {
 
       setUser(result.user);
       setToken(result.token);
-      await AsyncStorage.setItem('@henfarm/userId', result.user._id);
-      await AsyncStorage.setItem('@henfarm/token', result.token);
+      await Promise.all([
+        AsyncStorage.setItem('@henfarm/userId', result.user._id),
+        AsyncStorage.setItem('@henfarm/token', result.token),
+        AsyncStorage.setItem('@henfarm/userData', JSON.stringify(result.user)),
+      ]);
       await loadUserData(result.user._id, result.token);
     } catch (error) {
       console.error('Registration failed:', error);
@@ -242,7 +268,7 @@ export function HenFarmProvider({ children }: { children: React.ReactNode }) {
   }, [loadUserData]);
 
   const logout = useCallback(async () => {
-    await AsyncStorage.multiRemove(['@henfarm/userId', '@henfarm/token']);
+    await AsyncStorage.multiRemove(['@henfarm/userId', '@henfarm/token', '@henfarm/userData']);
     setUser(null);
     setToken(null);
     setReferralActivity([]);
