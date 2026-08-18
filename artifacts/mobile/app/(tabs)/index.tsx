@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Image, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Image, ImageBackground, ActivityIndicator } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { API_URL, useHenFarm } from '@/contexts/HenFarmApiContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,6 +26,7 @@ export default function HomeScreen() {
   } = useHenFarm();
 
   const [pendingOrders, setPendingOrders] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // A seller's relevant "hens" number is their selling stock, not hens they
   // personally bought (hensOwned) - those are two different things.
@@ -48,12 +49,25 @@ export default function HomeScreen() {
     }
   }, [user?._id, authFetch]);
 
+  const doRefresh = useCallback(async (withFeedback: boolean) => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([refreshData(), fetchOrderSummary()]);
+      if (withFeedback) showToast('Data refreshed successfully', 'success');
+    } catch {
+      if (withFeedback) showToast('Failed to refresh data', 'error');
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refreshData, fetchOrderSummary, showToast]);
+
   // Refetch every time this tab regains focus (e.g. after approving/creating
-  // an order elsewhere), not just once on mount - otherwise counts go stale.
+  // an order, or buying hens elsewhere) so hens/eggs/orders stay live -
+  // silent (no toast) since the user didn't explicitly ask for this one.
   useFocusEffect(
     useCallback(() => {
-      fetchOrderSummary();
-    }, [fetchOrderSummary])
+      doRefresh(false);
+    }, [doRefresh])
   );
 
   return (
@@ -85,17 +99,15 @@ export default function HomeScreen() {
           </View>
           <View style={styles.headerActions}>
             <Pressable
-              style={styles.refreshButton}
-              onPress={async () => {
-                try {
-                  await Promise.all([refreshData(), fetchOrderSummary()]);
-                  showToast('Data refreshed successfully', 'success');
-                } catch {
-                  showToast('Failed to refresh data', 'error');
-                }
-              }}
+              style={[styles.refreshButton, isRefreshing && styles.refreshButtonActive]}
+              disabled={isRefreshing}
+              onPress={() => doRefresh(true)}
             >
-              <Ionicons name="refresh" size={20} color="#FFFFFF" />
+              {isRefreshing ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Ionicons name="refresh" size={20} color="#FFFFFF" />
+              )}
             </Pressable>
           </View>
         </ImageBackground>
@@ -334,9 +346,15 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   refreshButton: {
-    padding: 8,
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 10,
+  },
+  refreshButtonActive: {
+    backgroundColor: 'rgba(255,255,255,0.4)',
   },
   avatarButton: {
     width: 36,
