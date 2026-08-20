@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Platform, Pressable, Alert, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Platform, Pressable, Alert, ActivityIndicator, Linking, Image } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { API_URL, useHenFarm } from '@/contexts/HenFarmApiContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +21,7 @@ interface Order {
   status: 'pending' | 'approved' | 'rejected' | 'expired' | 'completed' | 'cancelled';
   paymentMethod?: string;
   paymentProof?: string;
+  paymentProofImage?: string;
   buyerPaymentAccount?: string;
   whatsappProof?: string;
   rejectionReason?: string;
@@ -317,6 +318,18 @@ export default function OrdersScreen() {
                 Your Transaction ID: {order.paymentProof}
               </Text>
             )}
+            {order.paymentProofImage && (
+              <View style={styles.screenshotContainer}>
+                <Text style={[styles.screenshotLabel, { color: colors.mutedForeground }]}>
+                  Payment Screenshot:
+                </Text>
+                <Image
+                  source={{ uri: order.paymentProofImage }}
+                  style={styles.screenshotImage}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
           </View>
         )}
 
@@ -475,6 +488,18 @@ export default function OrdersScreen() {
               <Text style={[styles.paymentProofText, { color: '#FFA000' }]}>
                 Transaction ID: {order.paymentProof}
               </Text>
+            </View>
+          )}
+          {order.paymentProofImage && (
+            <View style={styles.screenshotContainer}>
+              <Text style={[styles.screenshotLabel, { color: colors.mutedForeground }]}>
+                Payment Screenshot:
+              </Text>
+              <Image
+                source={{ uri: order.paymentProofImage }}
+                style={styles.screenshotImage}
+                resizeMode="contain"
+              />
             </View>
           )}
         </View>
@@ -1098,5 +1123,21 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     paddingHorizontal: 16,
     paddingBottom: 12,
+  },
+  screenshotContainer: {
+    marginTop: 10,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  screenshotLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+    marginBottom: 6,
+  },
+  screenshotImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
   },
 });

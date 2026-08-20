@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, Platform, Pressable,
   Modal, TextInput, ActivityIndicator, RefreshControl, Image, ImageBackground,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColors } from '@/hooks/useColors';
 import { API_URL, useHenFarm } from '@/contexts/HenFarmApiContext';
@@ -47,6 +48,8 @@ export default function MarketplaceScreen() {
   const [orderType, setOrderType] = useState<'buy-hen' | 'sell-egg'>('buy-hen');
   const [paymentMethod, setPaymentMethod] = useState<'easypaisa' | 'jazzcash' | 'bank'>('easypaisa');
   const [paymentProof, setPaymentProof] = useState('');
+  const [paymentProofImage, setPaymentProofImage] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [receiverAccount, setReceiverAccount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -77,6 +80,7 @@ export default function MarketplaceScreen() {
     setQuantity('1');
     setPaymentMethod('easypaisa');
     setPaymentProof('');
+    setPaymentProofImage(null);
     setReceiverAccount('');
     setShowPurchaseModal(true);
   };
@@ -87,8 +91,69 @@ export default function MarketplaceScreen() {
     setQuantity(availableEggs > 0 ? String(Math.floor(availableEggs)) : '1');
     setPaymentMethod('easypaisa');
     setPaymentProof('');
+    setPaymentProofImage(null);
     setReceiverAccount('');
     setShowPurchaseModal(true);
+  };
+
+  // Pick screenshot from gallery and upload directly to Cloudinary
+  const pickAndUploadImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        showToast('Gallery permission required to upload screenshot', 'error');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.7,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      const imageUri = result.assets[0].uri;
+      setIsUploadingImage(true);
+
+      // Step 1: Get signed upload params from backend
+      const signRes = await authFetch(`${API_URL}/upload/sign`, { method: 'POST' });
+      const signData = await signRes.json();
+
+      if (!signData.success) {
+        showToast('Failed to prepare upload. Try again.', 'error');
+        return;
+      }
+
+      // Step 2: Upload directly to Cloudinary using signed params
+      const formData = new FormData();
+      formData.append('file', {
+        uri: imageUri,
+        type: 'image/jpeg',
+        name: 'payment-proof.jpg',
+      } as any);
+      formData.append('api_key', signData.apiKey);
+      formData.append('timestamp', String(signData.timestamp));
+      formData.append('signature', signData.signature);
+      formData.append('folder', signData.folder);
+
+      const uploadRes = await fetch(
+        `https://api.cloudinary.com/v1_1/${signData.cloudName}/image/upload`,
+        { method: 'POST', body: formData }
+      );
+      const uploadData = await uploadRes.json();
+
+      if (uploadData.secure_url) {
+        setPaymentProofImage(uploadData.secure_url);
+        showToast('Screenshot uploaded!', 'success');
+      } else {
+        showToast('Upload failed. Please try again.', 'error');
+      }
+    } catch {
+      showToast('Failed to upload screenshot. Try again.', 'error');
+    } finally {
+      setIsUploadingImage(false);
+    }
   };
 
   const confirmPurchase = async () => {
@@ -119,6 +184,7 @@ export default function MarketplaceScreen() {
           pricePerUnit: unitPrice,
           paymentMethod,
           paymentProof,
+          paymentProofImage: paymentProofImage || '',
           receiverAccount,
         }),
       });
@@ -471,6 +537,44 @@ export default function MarketplaceScreen() {
                             autoCapitalize="none"
                           />
                         </View>
+
+                        {/* Screenshot Upload */}
+                        <Text style={[styles.paymentDetailHint, { color: colors.mutedForeground, marginTop: 12 }]}>
+                          Upload payment screenshot (optional but recommended):
+                        </Text>
+                        {paymentProofImage ? (
+                          <View style={styles.screenshotPreviewWrapper}>
+                            <Image
+                              source={{ uri: paymentProofImage }}
+                              style={styles.screenshotPreview}
+                              resizeMode="cover"
+                            />
+                            <Pressable
+                              onPress={() => setPaymentProofImage(null)}
+                              style={styles.screenshotRemoveBtn}
+                            >
+                              <Ionicons name="close-circle" size={22} color="#EF4444" />
+                            </Pressable>
+                          </View>
+                        ) : (
+                          <Pressable
+                            onPress={pickAndUploadImage}
+                            disabled={isUploadingImage}
+                            style={[styles.uploadBtn, { borderColor: colors.primary, opacity: isUploadingImage ? 0.6 : 1 }]}
+                          >
+                            {isUploadingImage ? (
+                              <>
+                                <ActivityIndicator size="small" color={colors.primary} />
+                                <Text style={[styles.uploadBtnText, { color: colors.primary }]}>Uploading...</Text>
+                              </>
+                            ) : (
+                              <>
+                                <Ionicons name="cloud-upload-outline" size={20} color={colors.primary} />
+                                <Text style={[styles.uploadBtnText, { color: colors.primary }]}>Upload Screenshot</Text>
+                              </>
+                            )}
+                          </Pressable>
+                        )}
                       </>
                     ) : (
                       <>
@@ -763,4 +867,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalConfirmText: { fontSize: 15, fontFamily: 'Inter_700Bold', color: '#FFFFFF' },
+  uploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+  },
+  uploadBtnText: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  screenshotPreviewWrapper: {
+    marginTop: 8,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  screenshotPreview: {
+    width: '100%',
+    height: 160,
+    borderRadius: 12,
+  },
+  screenshotRemoveBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+  },
 });
