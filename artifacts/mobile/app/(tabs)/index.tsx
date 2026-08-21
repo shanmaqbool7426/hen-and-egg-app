@@ -168,6 +168,37 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* Buy & Sell Quick Actions */}
+        <View style={styles.marketplaceActions}>
+          <Pressable
+            style={({ pressed }) => [styles.marketplaceBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
+            onPress={() => router.push('/(tabs)/farm')}
+          >
+            <View style={styles.marketplaceBtnIcon}>
+              <MaterialCommunityIcons name="egg" size={26} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.marketplaceBtnTitle}>Buy Hens</Text>
+              <Text style={styles.marketplaceBtnSub}>From verified dealers</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.7)" />
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.marketplaceBtn, { backgroundColor: '#047857', opacity: pressed ? 0.85 : 1 }]}
+            onPress={() => router.push('/(tabs)/farm')}
+          >
+            <View style={styles.marketplaceBtnIcon}>
+              <MaterialCommunityIcons name="cash-multiple" size={26} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.marketplaceBtnTitle}>Sell Eggs</Text>
+              <Text style={styles.marketplaceBtnSub}>Get paid instantly</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.7)" />
+          </Pressable>
+        </View>
+
         {/* Call to Action */}
         {isSeller ? (
           <Pressable
@@ -538,5 +569,35 @@ const styles = StyleSheet.create({
   navLabel: {
     fontSize: 13,
     fontFamily: 'Inter_600SemiBold',
+  },
+  marketplaceActions: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  marketplaceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 18,
+    gap: 14,
+  },
+  marketplaceBtnIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  marketplaceBtnTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  marketplaceBtnSub: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    color: 'rgba(255,255,255,0.8)',
   },
 });

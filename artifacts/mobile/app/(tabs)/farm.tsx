@@ -36,7 +36,7 @@ export default function MarketplaceScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { availableEggs, user, authFetch } = useHenFarm();
+  const { availableEggs, user, authFetch, token } = useHenFarm();
   const { showToast } = useToast();
 
   const [sellers, setSellers] = useState<SellerListing[]>([]);
@@ -78,7 +78,9 @@ export default function MarketplaceScreen() {
     setSelectedSeller(seller);
     setOrderType('buy-hen');
     setQuantity('1');
-    setPaymentMethod('easypaisa');
+    // Auto-select first available payment method
+    const defaultMethod = seller.easyPaisaAccount ? 'easypaisa' : seller.jazzCashAccount ? 'jazzcash' : 'bank';
+    setPaymentMethod(defaultMethod);
     setPaymentProof('');
     setPaymentProofImage(null);
     setReceiverAccount('');
@@ -89,7 +91,8 @@ export default function MarketplaceScreen() {
     setSelectedSeller(seller);
     setOrderType('sell-egg');
     setQuantity(availableEggs > 0 ? String(Math.floor(availableEggs)) : '1');
-    setPaymentMethod('easypaisa');
+    const defaultMethod = seller.easyPaisaAccount ? 'easypaisa' : seller.jazzCashAccount ? 'jazzcash' : 'bank';
+    setPaymentMethod(defaultMethod);
     setPaymentProof('');
     setPaymentProofImage(null);
     setReceiverAccount('');
@@ -106,9 +109,9 @@ export default function MarketplaceScreen() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.7,
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.8,
       });
 
       if (result.canceled || !result.assets?.[0]) return;
@@ -117,19 +120,27 @@ export default function MarketplaceScreen() {
       setIsUploadingImage(true);
 
       // Step 1: Get signed upload params from backend
-      const signRes = await authFetch(`${API_URL}/upload/sign`, { method: 'POST' });
-      const signData = await signRes.json();
+      // Use raw fetch with token directly — NOT authFetch because
+      // authFetch sets Content-Type: application/json which breaks FormData
+      const tokenRes = await fetch(`${API_URL}/upload/sign`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      const signData = await tokenRes.json();
 
       if (!signData.success) {
         showToast('Failed to prepare upload. Try again.', 'error');
         return;
       }
 
-      // Step 2: Upload directly to Cloudinary using signed params
+      // Step 2: Upload directly to Cloudinary
       const formData = new FormData();
       formData.append('file', {
         uri: imageUri,
-        type: 'image/jpeg',
+        type: result.assets[0].mimeType || 'image/jpeg',
         name: 'payment-proof.jpg',
       } as any);
       formData.append('api_key', signData.apiKey);
@@ -141,15 +152,18 @@ export default function MarketplaceScreen() {
         `https://api.cloudinary.com/v1_1/${signData.cloudName}/image/upload`,
         { method: 'POST', body: formData }
       );
+
       const uploadData = await uploadRes.json();
 
       if (uploadData.secure_url) {
         setPaymentProofImage(uploadData.secure_url);
         showToast('Screenshot uploaded!', 'success');
       } else {
+        console.error('Cloudinary error:', JSON.stringify(uploadData));
         showToast('Upload failed. Please try again.', 'error');
       }
-    } catch {
+    } catch (err) {
+      console.error('Upload error:', err);
       showToast('Failed to upload screenshot. Try again.', 'error');
     } finally {
       setIsUploadingImage(false);
@@ -474,26 +488,37 @@ export default function MarketplaceScreen() {
                   {/* Payment Method */}
                   <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Payment Method</Text>
                   <View style={styles.paymentMethodsRow}>
-                    {(['easypaisa', 'jazzcash', 'bank'] as const).map((method) => (
-                      <Pressable
-                        key={method}
-                        onPress={() => setPaymentMethod(method)}
-                        style={[
-                          styles.paymentMethodBtn,
-                          {
-                            backgroundColor: paymentMethod === method ? colors.primary : colors.background,
-                            borderColor: paymentMethod === method ? colors.primary : colors.border,
-                          },
-                        ]}
-                      >
-                        <Text style={[
-                          styles.paymentMethodText,
-                          { color: paymentMethod === method ? '#FFFFFF' : colors.mutedForeground },
-                        ]}>
-                          {method === 'easypaisa' ? 'EasyPaisa' : method === 'jazzcash' ? 'JazzCash' : 'Bank'}
-                        </Text>
-                      </Pressable>
-                    ))}
+                    {(['easypaisa', 'jazzcash', 'bank'] as const).map((method) => {
+                      const isAvailable =
+                        method === 'easypaisa' ? !!selectedSeller.easyPaisaAccount :
+                        method === 'jazzcash' ? !!selectedSeller.jazzCashAccount :
+                        !!selectedSeller.bankAccountNumber;
+                      const isSelected = paymentMethod === method;
+                      return (
+                        <Pressable
+                          key={method}
+                          onPress={() => isAvailable && setPaymentMethod(method)}
+                          style={[
+                            styles.paymentMethodBtn,
+                            {
+                              backgroundColor: isSelected ? colors.primary : colors.background,
+                              borderColor: isSelected ? colors.primary : colors.border,
+                              opacity: isAvailable ? 1 : 0.35,
+                            },
+                          ]}
+                        >
+                          <Text style={[
+                            styles.paymentMethodText,
+                            { color: isSelected ? '#FFFFFF' : colors.mutedForeground },
+                          ]}>
+                            {method === 'easypaisa' ? 'EasyPaisa' : method === 'jazzcash' ? 'JazzCash' : 'Bank'}
+                          </Text>
+                          {!isAvailable && (
+                            <Text style={[styles.paymentMethodNA, { color: colors.mutedForeground }]}>N/A</Text>
+                          )}
+                        </Pressable>
+                      );
+                    })}
                   </View>
 
                   {/* Payment Details */}
@@ -523,24 +548,9 @@ export default function MarketplaceScreen() {
                             </Text>
                           </>
                         )}
-                        <Text style={[styles.paymentDetailHint, { color: colors.mutedForeground }]}>
-                          After sending, paste the Transaction ID below:
-                        </Text>
-                        <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 8 }]}>
-                          <Ionicons name="receipt-outline" size={18} color="#94A3B8" style={{ marginRight: 10 }} />
-                          <TextInput
-                            style={[styles.modalInput, { color: colors.foreground }]}
-                            value={paymentProof}
-                            onChangeText={setPaymentProof}
-                            placeholder="Transaction ID / payment note"
-                            placeholderTextColor="#64748B"
-                            autoCapitalize="none"
-                          />
-                        </View>
-
                         {/* Screenshot Upload */}
-                        <Text style={[styles.paymentDetailHint, { color: colors.mutedForeground, marginTop: 12 }]}>
-                          Upload payment screenshot (optional but recommended):
+                        <Text style={[styles.paymentDetailHint, { color: colors.mutedForeground, marginTop: 8 }]}>
+                          Upload payment screenshot:
                         </Text>
                         {paymentProofImage ? (
                           <View style={styles.screenshotPreviewWrapper}>
@@ -839,6 +849,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   paymentMethodText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  paymentMethodNA: { fontSize: 9, fontFamily: 'Inter_400Regular', textAlign: 'center', marginTop: 1, opacity: 0.7 },
   paymentDetailsBox: {
     padding: 14,
     borderRadius: 14,
