@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Image, ImageBackground, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Image, ImageBackground, ActivityIndicator, RefreshControl } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { API_URL, useHenFarm } from '@/contexts/HenFarmApiContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +21,7 @@ export default function HomeScreen() {
     availableEggs,
     totalEggsEarned,
     completedReferralCount,
+    referralActivity,
     refreshData,
     authFetch,
   } = useHenFarm();
@@ -31,7 +32,16 @@ export default function HomeScreen() {
   // A seller's relevant "hens" number is their selling stock, not hens they
   // personally bought (hensOwned) - those are two different things.
   const isSeller = user?.role === 'seller';
+  const isBuyer = user?.role === 'buyer';
   const primaryHensCount = isSeller ? (user?.availableHens || 0) : hensOwned;
+
+  const referralEggs = useMemo(
+    () =>
+      referralActivity
+        .filter(a => a.type === 'referral-egg-bonus')
+        .reduce((sum, a) => sum + a.quantity, 0),
+    [referralActivity]
+  );
 
   const fetchOrderSummary = useCallback(async () => {
     if (!user?._id) return;
@@ -69,6 +79,113 @@ export default function HomeScreen() {
       doRefresh(false);
     }, [doRefresh])
   );
+
+  if (isBuyer) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <ScrollView
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={() => doRefresh(true)}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
+          }
+          contentContainerStyle={[
+            styles.buyerScrollContent,
+            { paddingTop: Platform.OS === 'web' ? 67 + 20 : insets.top + 20 },
+            { paddingBottom: Platform.OS === 'web' ? 84 + 20 : insets.bottom + 84 + 20 },
+          ]}
+        >
+          {/* Top row */}
+          <View style={styles.buyerTopRow}>
+            <Text style={[styles.buyerName, { color: colors.foreground }]} numberOfLines={1}>
+              {user?.name || 'Friend'}
+            </Text>
+            <Text style={[styles.buyerReferredBy, { color: colors.mutedForeground }]} numberOfLines={1}>
+              Referred by: {user?.referredBy ? user.referredBy : 'Direct'}
+            </Text>
+          </View>
+
+          {/* Hero card */}
+          <LinearGradient
+            colors={[colors.primary, '#0A2E1A']}
+            style={[styles.buyerHero, heroShadow(colors)]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View>
+              <Text style={styles.buyerHeroLabel}>Eggs Ready to Sell</Text>
+              <Text style={styles.buyerHeroValue}>{formatNumber(availableEggs)}</Text>
+            </View>
+            <View style={styles.buyerHeroBadge}>
+              <Image source={require('@/assets/images/icon.png')} style={styles.buyerHeroBadgeImage} />
+            </View>
+          </LinearGradient>
+
+          {/* Two stat boxes */}
+          <View style={styles.buyerStatsRow}>
+            <View style={[styles.buyerStatBox, { backgroundColor: colors.primary }]}>
+              <Text style={styles.buyerStatValue}>{formatNumber(totalEggsEarned)}</Text>
+              <Text style={styles.buyerStatLabel}>Your Total Eggs</Text>
+            </View>
+            <View style={[styles.buyerStatBox, { backgroundColor: colors.primary }]}>
+              <Text style={styles.buyerStatValue}>{formatNumber(referralEggs)}</Text>
+              <Text style={styles.buyerStatLabel}>Referred Eggs</Text>
+            </View>
+          </View>
+
+          <Text style={[styles.buyerHelperText, { color: colors.mutedForeground }]}>
+            Automatic collection is active!{'\n'}Pull down to refresh and check your resources.
+          </Text>
+
+          {/* Circular hero image */}
+          <View style={styles.buyerCircleWrap}>
+            <View style={[styles.buyerCircleRing, { borderColor: colors.primary }]}>
+              <Image source={require('@/assets/images/icon.png')} style={styles.buyerCircleImage} />
+            </View>
+          </View>
+
+          {/* Buy / Sell actions */}
+          <View style={styles.buyerActionsRow}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.buyerActionBtn,
+                { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
+              ]}
+              onPress={() => router.push('/(tabs)/farm')}
+            >
+              <MaterialCommunityIcons name="bird" size={20} color="#FFFFFF" />
+              <Text style={styles.buyerActionBtnText}>Buy Hens</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.buyerActionBtn,
+                { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
+              ]}
+              onPress={() => router.push('/(tabs)/farm')}
+            >
+              <MaterialCommunityIcons name="egg" size={20} color={colors.accentForeground} />
+              <Text style={[styles.buyerActionBtnText, { color: colors.accentForeground }]}>Sell Eggs</Text>
+            </Pressable>
+          </View>
+
+          {/* Daily production */}
+          <Text style={[styles.buyerSectionLabel, { color: colors.foreground }]}>Your daily production:</Text>
+          <View style={[styles.buyerDailyCard, { backgroundColor: colors.card }, cardShadow(colors)]}>
+            <View style={[styles.buyerDailyIconCircle, { backgroundColor: colors.primary }]}>
+              <MaterialCommunityIcons name="bird" size={26} color="#FFFFFF" />
+            </View>
+            <Text style={[styles.buyerDailyValue, { color: colors.foreground }]}>{formatNumber(hensOwned)}</Text>
+            <Text style={[styles.buyerDailyLabel, { color: colors.mutedForeground }]}>
+              Daily Eggs{hensOwned > 0 ? ` · from ${hensOwned} hen${hensOwned === 1 ? '' : 's'}` : ''}
+            </Text>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -599,5 +716,148 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_400Regular',
     color: 'rgba(255,255,255,0.8)',
+  },
+  buyerScrollContent: {
+    paddingHorizontal: 20,
+  },
+  buyerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  buyerName: {
+    fontSize: 17,
+    fontFamily: 'Inter_700Bold',
+    flexShrink: 1,
+  },
+  buyerReferredBy: {
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+  },
+  buyerHero: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 14,
+  },
+  buyerHeroLabel: {
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    color: 'rgba(255,255,255,0.85)',
+    marginBottom: 6,
+  },
+  buyerHeroValue: {
+    fontSize: 34,
+    fontFamily: 'Inter_700Bold',
+    color: '#FFFFFF',
+    letterSpacing: -1,
+  },
+  buyerHeroBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  buyerHeroBadgeImage: {
+    width: '100%',
+    height: '100%',
+  },
+  buyerStatsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  buyerStatBox: {
+    flex: 1,
+    borderRadius: 18,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  buyerStatValue: {
+    fontSize: 22,
+    fontFamily: 'Inter_700Bold',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  buyerStatLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    color: 'rgba(255,255,255,0.85)',
+  },
+  buyerHelperText: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 20,
+  },
+  buyerCircleWrap: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  buyerCircleRing: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  buyerCircleImage: {
+    width: '100%',
+    height: '100%',
+  },
+  buyerActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  buyerActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 16,
+  },
+  buyerActionBtnText: {
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
+    color: '#FFFFFF',
+  },
+  buyerSectionLabel: {
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+    marginBottom: 12,
+  },
+  buyerDailyCard: {
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  buyerDailyIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  buyerDailyValue: {
+    fontSize: 24,
+    fontFamily: 'Inter_700Bold',
+    marginBottom: 4,
+  },
+  buyerDailyLabel: {
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
   },
 });
