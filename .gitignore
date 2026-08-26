@@ -15,8 +15,6 @@ artifacts/api-server/api/_lib
 node_modules
 
 # secrets - real DB credentials live here, never commit
-.env
-.env.local
 .env.*.local
 
 # IDEs and editors
@@ -29,7 +27,6 @@ node_modules
 *.sublime-workspace
 
 # IDE - VSCode
-.vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
@@ -55,3 +52,7 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+config.bat
